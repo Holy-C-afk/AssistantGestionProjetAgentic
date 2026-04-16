@@ -1,0 +1,13 @@
+C:\Users\hp\source\repos\AgentPM.Domain\bin\Debug\net10.0\AgentPM.Domain.deps.json
+C:\Users\hp\source\repos\AgentPM.Domain\bin\Debug\net10.0\AgentPM.Domain.dll
+C:\Users\hp\source\repos\AgentPM.Domain\bin\Debug\net10.0\AgentPM.Domain.pdb
+C:\Users\hp\source\repos\AgentPM.Domain\obj\Debug\net10.0\AgentPM.Domain.csproj.AssemblyReference.cache
+C:\Users\hp\source\repos\AgentPM.Domain\obj\Debug\net10.0\AgentPM.Domain.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\hp\source\repos\AgentPM.Domain\obj\Debug\net10.0\AgentPM.Domain.AssemblyInfoInputs.cache
+C:\Users\hp\source\repos\AgentPM.Domain\obj\Debug\net10.0\AgentPM.Domain.AssemblyInfo.cs
+C:\Users\hp\source\repos\AgentPM.Domain\obj\Debug\net10.0\AgentPM.Domain.csproj.CoreCompileInputs.cache
+C:\Users\hp\source\repos\AgentPM.Domain\obj\Debug\net10.0\EFCoreNpgsqlPgvector.cs
+C:\Users\hp\source\repos\AgentPM.Domain\obj\Debug\net10.0\AgentPM.Domain.dll
+C:\Users\hp\source\repos\AgentPM.Domain\obj\Debug\net10.0\refint\AgentPM.Domain.dll
+C:\Users\hp\source\repos\AgentPM.Domain\obj\Debug\net10.0\AgentPM.Domain.pdb
+C:\Users\hp\source\repos\AgentPM.Domain\obj\Debug\net10.0\ref\AgentPM.Domain.dll

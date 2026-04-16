@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="../AgentPM.Application/AgentPM.Application.csproj" />
+  <Project Path="../AgentPM.Domain/AgentPM.Domain.csproj" />
+  <Project Path="../AgentPM.Infrastructure/AgentPM.Infrastructure.csproj" />
+  <Project Path="AgentPM.Api.csproj" />
+</Solution>
