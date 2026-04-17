@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 namespace AgentPM.Api.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/tasks")]
 public class TaskController : ControllerBase
 {
     private readonly AppDbContext _db;

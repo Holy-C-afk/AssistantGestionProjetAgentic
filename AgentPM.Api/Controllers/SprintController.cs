@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 namespace AgentPM.Api.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/sprints")]
 public class SprintController : ControllerBase
 {
     private readonly AppDbContext _db;

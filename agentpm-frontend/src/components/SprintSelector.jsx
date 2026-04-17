@@ -5,6 +5,7 @@ export default function SprintSelector({ projectId, selectedSprintId, onSelect, 
   const [sprints, setSprints] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: '', goal: '', startDate: '', endDate: '' });
+  const [formError, setFormError] = useState('');
 
   const fetchSprints = async () => {
     if (!projectId) return;
@@ -24,6 +25,7 @@ export default function SprintSelector({ projectId, selectedSprintId, onSelect, 
 
   const handleCreate = async (e) => {
     e.preventDefault();
+    setFormError('');
     try {
       const newSprint = await createSprint({
         projectId,
@@ -38,6 +40,7 @@ export default function SprintSelector({ projectId, selectedSprintId, onSelect, 
       onSelect(newSprint.id);
     } catch (e) {
       console.error(e);
+      setFormError(e?.response?.data?.message || 'Erreur lors de la création.');
     }
   };
 
@@ -65,34 +68,47 @@ export default function SprintSelector({ projectId, selectedSprintId, onSelect, 
       </div>
 
       {showForm && (
-        <form onSubmit={handleCreate} className="mb-4 p-3 bg-gray-50 rounded-lg space-y-2">
-          <input
-            required
-            placeholder="Nom du sprint"
-            value={form.name}
-            onChange={e => setForm({ ...form, name: e.target.value })}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-          />
-          <input
-            placeholder="Objectif (optionnel)"
-            value={form.goal}
-            onChange={e => setForm({ ...form, goal: e.target.value })}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-          />
-          <div className="flex gap-2">
+        <form onSubmit={handleCreate} className="mb-4 p-3 bg-gray-50 rounded-lg space-y-3">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Nom *</label>
+            <input
+              required
+              placeholder="Sprint 1"
+              value={form.name}
+              onChange={e => setForm({ ...form, name: e.target.value })}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Objectif</label>
+            <input
+              placeholder="Objectif du sprint"
+              value={form.goal}
+              onChange={e => setForm({ ...form, goal: e.target.value })}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Date de début</label>
             <input
               type="date"
               value={form.startDate}
               onChange={e => setForm({ ...form, startDate: e.target.value })}
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Date de fin</label>
             <input
               type="date"
               value={form.endDate}
               onChange={e => setForm({ ...form, endDate: e.target.value })}
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
+          {formError && (
+            <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{formError}</p>
+          )}
           <button
             type="submit"
             className="bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-indigo-700 w-full"

@@ -1,0 +1,283 @@
+{
+  "info": {
+    "name": "AgentPM API",
+    "description": "Full collection for AgentPM — Projects, Sprints, Tasks, Comments, PDF",
+    "_postman_id": "agentpm-collection-v1",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5157/api" },
+    { "key": "projectId", "value": "REPLACE_WITH_PROJECT_ID" },
+    { "key": "sprintId",  "value": "REPLACE_WITH_SPRINT_ID"  },
+    { "key": "taskId",    "value": "REPLACE_WITH_TASK_ID"    },
+    { "key": "userId",    "value": "REPLACE_WITH_USER_ID"    },
+    { "key": "commentId", "value": "REPLACE_WITH_COMMENT_ID" }
+  ],
+  "item": [
+    {
+      "name": "Projects",
+      "item": [
+        {
+          "name": "List projects (paginated + filters)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/project?page=1&pageSize=10&status=active&search=",
+              "host": ["{{baseUrl}}"],
+              "path": ["project"],
+              "query": [
+                { "key": "page",     "value": "1" },
+                { "key": "pageSize", "value": "10" },
+                { "key": "status",   "value": "active" },
+                { "key": "search",   "value": "", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get project by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/project/{{projectId}}"
+          }
+        },
+        {
+          "name": "Create project",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/project",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Mon Nouveau Projet\",\n  \"description\": \"Description du projet\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Update project",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/project/{{projectId}}",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Nom Modifié\",\n  \"description\": \"Nouvelle description\",\n  \"status\": \"active\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete project",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/project/{{projectId}}"
+          }
+        },
+        {
+          "name": "Export project PDF",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/project/{{projectId}}/pdf"
+          }
+        },
+        {
+          "name": "Get project members",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/project/{{projectId}}/members"
+          }
+        },
+        {
+          "name": "Add member to project",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/project/{{projectId}}/members",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{userId}}\",\n  \"role\": \"member\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Remove member from project",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/project/{{projectId}}/members/{{userId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sprints",
+      "item": [
+        {
+          "name": "List sprints by project",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/sprints?projectId={{projectId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["sprints"],
+              "query": [{ "key": "projectId", "value": "{{projectId}}" }]
+            }
+          }
+        },
+        {
+          "name": "Get sprint by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/sprints/{{sprintId}}"
+          }
+        },
+        {
+          "name": "Create sprint",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/sprints",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": \"{{projectId}}\",\n  \"name\": \"Sprint 1\",\n  \"goal\": \"Livrer les fonctionnalités de base\",\n  \"startDate\": \"2026-04-17\",\n  \"endDate\": \"2026-04-30\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Update sprint goal",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/sprints/{{sprintId}}/goal",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"goal\": \"Nouvel objectif du sprint\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Close sprint",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/sprints/{{sprintId}}/close"
+          }
+        },
+        {
+          "name": "Get sprint board (kanban)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/sprints/{{sprintId}}/board"
+          }
+        },
+        {
+          "name": "Delete sprint",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/sprints/{{sprintId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tasks",
+      "item": [
+        {
+          "name": "List tasks (filter by project/sprint/status)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/tasks?projectId={{projectId}}&sprintId=&status=&assigneeId=",
+              "host": ["{{baseUrl}}"],
+              "path": ["tasks"],
+              "query": [
+                { "key": "projectId",  "value": "{{projectId}}" },
+                { "key": "sprintId",   "value": "", "disabled": true },
+                { "key": "status",     "value": "", "disabled": true },
+                { "key": "assigneeId", "value": "", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get task by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/tasks/{{taskId}}"
+          }
+        },
+        {
+          "name": "Create task",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/tasks",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": \"{{projectId}}\",\n  \"sprintId\": \"{{sprintId}}\",\n  \"title\": \"Implémenter l'authentification\",\n  \"description\": \"Mettre en place JWT + refresh tokens\",\n  \"priority\": \"high\",\n  \"storyPoints\": 5,\n  \"assigneeId\": null\n}"
+            }
+          }
+        },
+        {
+          "name": "Update task",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/tasks/{{taskId}}",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Titre mis à jour\",\n  \"description\": \"Description mise à jour\",\n  \"priority\": \"medium\",\n  \"storyPoints\": 3,\n  \"assigneeId\": \"{{userId}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Move task (change status)",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/tasks/{{taskId}}/move",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"in_progress\",\n  \"order\": 1\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete task",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/tasks/{{taskId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Comments",
+      "item": [
+        {
+          "name": "Get comments for task",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/tasks/{{taskId}}/comments"
+          }
+        },
+        {
+          "name": "Add comment to task",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/tasks/{{taskId}}/comments",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Ceci est un commentaire.\",\n  \"authorId\": null\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete comment",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/tasks/{{taskId}}/comments/{{commentId}}"
+          }
+        }
+      ]
+    }
+  ]
+}

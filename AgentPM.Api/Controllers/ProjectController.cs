@@ -190,6 +190,9 @@ public class ProjectController : ControllerBase
 
         if (project is null) return NotFound();
 
+        try
+        {
+
         var pdf = Document.Create(container =>
         {
             container.Page(page =>
@@ -309,5 +312,11 @@ public class ProjectController : ControllerBase
         var bytes = pdf.GeneratePdf();
         var filename = $"project_{project.Name.Replace(" ", "_")}_{DateTime.UtcNow:yyyyMMdd}.pdf";
         return File(bytes, "application/pdf", filename);
+
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "Erreur PDF: " + ex.Message });
+        }
     }
 }
