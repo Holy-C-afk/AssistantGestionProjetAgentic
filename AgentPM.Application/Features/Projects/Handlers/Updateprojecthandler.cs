@@ -1,0 +1,35 @@
+﻿using AgentPM.Application.Features.Projects.Commands;
+using AgentPM.Application.Features.Projects.DTOs;
+using AgentPM.Domain.Interfaces;
+using MediatR;
+
+namespace AgentPM.Application.Features.Projects.Handlers;
+
+public class UpdateProjectHandler : IRequestHandler<UpdateProjectCommand, ProjectDto>
+{
+    private readonly IProjectRepository _repo;
+
+    public UpdateProjectHandler(IProjectRepository repo)
+    {
+        _repo = repo;
+    }
+
+    public async Task<ProjectDto> Handle(UpdateProjectCommand request, CancellationToken ct)
+    {
+        var aggregate = await _repo.GetByIdAsync(request.ProjectId, ct)
+            ?? throw new KeyNotFoundException($"Project {request.ProjectId} not found.");
+
+        aggregate.Update(request.Name, request.Description);
+        await _repo.UpdateAsync(aggregate.Project, ct);
+
+        return new ProjectDto(
+            aggregate.Project.Id,
+            aggregate.Project.Name,
+            aggregate.Project.Description,
+            aggregate.Project.OwnerId,
+            aggregate.Project.Status,
+            aggregate.Project.CreatedAt,
+            aggregate.Project.Members.Count
+        );
+    }
+}

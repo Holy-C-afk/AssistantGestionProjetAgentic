@@ -7,19 +7,48 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Features\Auth\**" />
+    <EmbeddedResource Remove="Features\Auth\**" />
+    <None Remove="Features\Auth\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Features\Sprints\Handlers\SprintHandlers.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\AgentPM.Domain\AgentPM.Domain.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Features\Auth\Queries\" />
     <Folder Include="Validators\" />
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="Features\Sprints\Handlers\SprintHandlers.cs">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>SprintHandlers.Context.cs</LastGenOutput>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="BCrypt.Net-Next" Version="4.1.0" />
+    <PackageReference Include="EntityFramework" Version="6.2.0" />
     <PackageReference Include="FluentValidation" Version="12.1.1" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
     <PackageReference Include="MediatR" Version="14.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Service Include="{508349b6-6b84-4df5-91f0-309beebad82d}" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="Features\Sprints\Handlers\SprintHandlers.Context.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>SprintHandlers.cs</DependentUpon>
+    </Compile>
   </ItemGroup>
 
 </Project>

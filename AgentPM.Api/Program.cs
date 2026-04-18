@@ -2,12 +2,16 @@ using AgentPM.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Identity.Web;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
-using QuestPDF.Infrastructure;
-
-QuestPDF.Settings.License = LicenseType.Community;
+using AgentPM.Domain.Interfaces;
+using AgentPM.Infrastructure.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddScoped<IProjectRepository, ProjectRepository>();
+builder.Services.AddScoped<ISprintBoardRepository, SprintBoardRepository>();
+
 
 // ── Database ──────────────────────────────────────────────
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -18,38 +22,37 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 );
 
 // ── Azure AD ──────────────────────────────────────────────
-/*builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        options.Authority = $"https://login.microsoftonline.com/{builder.Configuration["AzureAd:TenantId"]}/v2.0";
-
+        options.Authority = "https://login.microsoftonline.com/d6c5bbe2-0dd0-4148-a86c-ffe8f3e95c29";
+        options.Audience = "api://dbf4a5ac-a3e3-445c-b0fe-c44a997bb684";
         options.TokenValidationParameters = new()
         {
-            ValidateIssuer = true,
             ValidateAudience = true,
-            ValidAudience = $"api://{builder.Configuration["AzureAd:ClientId"]}"
+            ValidateIssuer = true,
+            ValidIssuers = new[]
+            {
+                "https://sts.windows.net/d6c5bbe2-0dd0-4148-a86c-ffe8f3e95c29/",
+                "https://login.microsoftonline.com/d6c5bbe2-0dd0-4148-a86c-ffe8f3e95c29/v2.0"
+            }
         };
-    }); */
-builder.Services.AddAuthentication();
+    });
 
 // ── MediatR ───────────────────────────────────────────────
 builder.Services.AddMediatR(cfg =>
-    cfg.RegisterServicesFromAssembly(
-        typeof(AgentPM.Application.AssemblyReference).Assembly));
-
-builder.Services.AddScoped<AgentPM.Api.Services.EventLogger>();
+{
+    cfg.RegisterServicesFromAssembly(typeof(AgentPM.Application.AssemblyReference).Assembly);
+    cfg.RegisterServicesFromAssembly(typeof(AgentPM.Application.Features.Sprints.Handlers.GetSprintsHandler).Assembly);
+});
 
 builder.Services.AddAuthorization();
-builder.Services.AddControllers()
-    .AddJsonOptions(o =>
-    {
-        o.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
-    });
+builder.Services.AddControllers();
 
 // ── CORS ──────────────────────────────────────────────────
 builder.Services.AddCors(options =>
     options.AddPolicy("Frontend", policy =>
-        policy.WithOrigins("http://localhost:5173", "http://localhost:5174")
+        policy.WithOrigins("http://localhost:5173")
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials()));
