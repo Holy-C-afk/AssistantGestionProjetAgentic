@@ -1,7 +1,4 @@
-import axios from 'axios';
-
-const api = axios.create({ baseURL: 'http://localhost:5157/api' });
-
+import api from './api';
 export const getTasks = (params = {}) =>
   api.get('/tasks', { params }).then(r => r.data);
 

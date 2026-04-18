@@ -1,11 +1,7 @@
-import axios from 'axios';
+import api from './api';
 
-const api = axios.create({
-  baseURL: 'http://localhost:5157/api',
-});
-
-export const getMyProjects = (params = {}) =>
-  api.get('/project', { params }).then(r => r.data);
+export const getMyProjects = () =>
+  api.get('/project').then(r => r.data);
 
 export const getProjectById = (id) =>
   api.get(`/project/${id}`).then(r => r.data);
@@ -30,13 +26,14 @@ export const removeMember = (projectId, userId) =>
 
 export const getMe = () =>
   api.get('/auth/me').then(r => r.data);
-
 export const downloadProjectPdf = async (id, projectName) => {
   const response = await api.get(`/project/${id}/pdf`, { responseType: 'blob' });
-  const url = URL.createObjectURL(response.data);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `project_${projectName.replace(/\s+/g, '_')}.pdf`;
-  a.click();
-  URL.revokeObjectURL(url);
+  const url = window.URL.createObjectURL(new Blob([response.data]));
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', `${projectName}.pdf`);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
 };

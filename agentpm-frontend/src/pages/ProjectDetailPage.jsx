@@ -100,7 +100,6 @@ export default function ProjectDetailPage() {
     <div className="bg-gray-50 p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
 
-        {/* Top bar */}
         <div className="flex justify-between items-center mb-6">
           <button
             onClick={() => navigate('/')}
@@ -130,7 +129,6 @@ export default function ProjectDetailPage() {
           </div>
         )}
 
-        {/* Project Info */}
         <div className="bg-white rounded-xl shadow p-6 mb-6">
           {editing ? (
             <form onSubmit={handleUpdate}>
@@ -161,9 +159,7 @@ export default function ProjectDetailPage() {
               <div>
                 <div className="flex items-center gap-3 mb-2">
                   <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
-                  <span className={`text-xs px-2 py-1 rounded-full ${
-                    statusStyles[project.status] || 'bg-gray-100 text-gray-600'
-                  }`}>
+                  <span className={`text-xs px-2 py-1 rounded-full ${statusStyles[project.status] || 'bg-gray-100 text-gray-600'}`}>
                     {project.status}
                   </span>
                 </div>
@@ -173,17 +169,13 @@ export default function ProjectDetailPage() {
                   {' • '}{project.memberCount} membre(s)
                 </p>
               </div>
-              <button
-                onClick={() => setEditing(true)}
-                className="text-indigo-600 hover:underline text-sm ml-4"
-              >
+              <button onClick={() => setEditing(true)} className="text-indigo-600 hover:underline text-sm ml-4">
                 Modifier
               </button>
             </div>
           )}
         </div>
 
-        {/* Tabs */}
         <div className="flex gap-1 mb-4 border-b border-gray-200">
           {[
             { k: 'board', l: 'Sprint Board' },
@@ -203,7 +195,6 @@ export default function ProjectDetailPage() {
           ))}
         </div>
 
-        {/* Content */}
         {tab === 'board' && (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
             <div className="lg:col-span-1">
@@ -227,7 +218,6 @@ export default function ProjectDetailPage() {
         {tab === 'members' && (
           <div className="bg-white rounded-xl shadow p-6">
             <h2 className="text-lg font-semibold mb-4">Membres ({members.length})</h2>
-
             <form onSubmit={handleAddMember} className="flex gap-3 mb-6 flex-wrap">
               <input
                 type="text"
@@ -246,14 +236,10 @@ export default function ProjectDetailPage() {
                 <option value="admin">Admin</option>
                 <option value="viewer">Viewer</option>
               </select>
-              <button
-                type="submit"
-                className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-indigo-700"
-              >
+              <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-indigo-700">
                 Ajouter
               </button>
             </form>
-
             <div className="space-y-2">
               {members.length === 0 && (
                 <p className="text-gray-400 text-sm text-center py-6">Aucun membre pour l'instant.</p>
@@ -265,16 +251,9 @@ export default function ProjectDetailPage() {
                     <p className="text-xs text-gray-500">{m.email}</p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full">
-                      {m.role}
-                    </span>
-                    <span className="text-xs text-gray-400">
-                      {new Date(m.joinedAt).toLocaleDateString('fr-FR')}
-                    </span>
-                    <button
-                      onClick={() => handleRemoveMember(m.userId)}
-                      className="text-red-400 hover:text-red-600 text-sm"
-                    >
+                    <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full">{m.role}</span>
+                    <span className="text-xs text-gray-400">{new Date(m.joinedAt).toLocaleDateString('fr-FR')}</span>
+                    <button onClick={() => handleRemoveMember(m.userId)} className="text-red-400 hover:text-red-600 text-sm">
                       Retirer
                     </button>
                   </div>
@@ -284,7 +263,6 @@ export default function ProjectDetailPage() {
           </div>
         )}
 
-        {/* Task detail modal */}
         {selectedTaskId && (
           <TaskDetailModal
             taskId={selectedTaskId}

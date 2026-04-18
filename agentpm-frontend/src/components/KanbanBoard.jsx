@@ -22,7 +22,7 @@ export default function KanbanBoard({ sprintId, projectId, onTaskClick, refreshK
     if (!sprintId) { setBoard(null); setLoading(false); return; }
     setLoading(true);
     try {
-      const data = await getSprintBoard(sprintId);
+      const data = await getSprintBoard(projectId, sprintId);
       setBoard(data);
     } catch (e) {
       console.error(e);

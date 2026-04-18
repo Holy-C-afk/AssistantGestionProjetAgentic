@@ -1,24 +1,21 @@
-import axios from 'axios';
-
-const api = axios.create({ baseURL: 'http://localhost:5157/api' });
-
+import api from './api';
 export const getSprints = (projectId) =>
-  api.get('/sprints', { params: { projectId } }).then(r => r.data);
+  api.get(`/project/${projectId}/sprints`).then(r => r.data);
 
-export const getSprint = (id) =>
-  api.get(`/sprints/${id}`).then(r => r.data);
+export const getSprint = (projectId, sprintId) =>
+  api.get(`/project/${projectId}/sprints/${sprintId}`).then(r => r.data);
 
-export const createSprint = (data) =>
-  api.post('/sprints', data).then(r => r.data);
+export const createSprint = (projectId, data) =>
+  api.post(`/project/${projectId}/sprints`, data).then(r => r.data);
 
-export const updateSprintGoal = (id, goal) =>
-  api.patch(`/sprints/${id}/goal`, { goal }).then(r => r.data);
+export const updateSprintGoal = (projectId, sprintId, goal) =>
+  api.patch(`/project/${projectId}/sprints/${sprintId}/goal`, { goal }).then(r => r.data);
 
-export const closeSprint = (id) =>
-  api.post(`/sprints/${id}/close`).then(r => r.data);
+export const closeSprint = (projectId, sprintId) =>
+  api.post(`/project/${projectId}/sprints/${sprintId}/close`).then(r => r.data);
 
-export const deleteSprint = (id) =>
-  api.delete(`/sprints/${id}`).then(r => r.data);
+export const deleteSprint = (projectId, sprintId) =>
+  api.delete(`/project/${projectId}/sprints/${sprintId}`).then(r => r.data);
 
-export const getSprintBoard = (id) =>
-  api.get(`/sprints/${id}/board`).then(r => r.data);
+export const getSprintBoard = (projectId, sprintId) =>
+  api.get(`/project/${projectId}/sprints/${sprintId}/board`).then(r => r.data);
