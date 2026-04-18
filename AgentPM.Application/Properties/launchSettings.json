@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "AgentPM.Application": {
+      "commandName": "Project"
+    },
+    "Profile 1": {
+      "commandName": "Executable",
+      "executablePath": "C:\\Users\\hp\\source\\repos\\AgentPMSolution\\AgentPM.Api\\AgentPM.slnx"
+    }
+  }
+}

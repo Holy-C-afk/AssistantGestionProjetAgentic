@@ -22,10 +22,5 @@
 		<ProjectReference Include="..\AgentPM.Domain\AgentPM.Domain.csproj" />
 		<ProjectReference Include="..\AgentPM.Infrastructure\AgentPM.Infrastructure.csproj" />
 	</ItemGroup>
-	<ItemGroup>
-		<ProjectReference Include="C:\Users\hp\source\repos\AgentPM.Application\AgentPM.Application.csproj" />
-		<ProjectReference Include="C:\Users\hp\source\repos\AgentPM.Domain\AgentPM.Domain.csproj" />
-		<ProjectReference Include="C:\Users\hp\source\repos\AgentPM.Infrastructure\AgentPM.Infrastructure.csproj" />
-	</ItemGroup>y
 
 </Project>

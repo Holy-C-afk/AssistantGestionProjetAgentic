@@ -1,16 +1,18 @@
 using AgentPM.Infrastructure.Persistence;
+using AgentPM.Domain.Interfaces;
+using AgentPM.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Identity.Web;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
-using AgentPM.Domain.Interfaces;
-using AgentPM.Infrastructure.Repositories;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddScoped<IProjectRepository, ProjectRepository>();
+builder.Services.AddScoped<ISprintRepository, SprintRepository>();
 builder.Services.AddScoped<ISprintBoardRepository, SprintBoardRepository>();
+builder.Services.AddScoped<IUserRepository, UserRepository>();
 
 
 // ── Database ──────────────────────────────────────────────
@@ -41,10 +43,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 // ── MediatR ───────────────────────────────────────────────
 builder.Services.AddMediatR(cfg =>
-{
-    cfg.RegisterServicesFromAssembly(typeof(AgentPM.Application.AssemblyReference).Assembly);
-    cfg.RegisterServicesFromAssembly(typeof(AgentPM.Application.Features.Sprints.Handlers.GetSprintsHandler).Assembly);
-});
+    cfg.RegisterServicesFromAssembly(
+        typeof(AgentPM.Application.AssemblyReference).Assembly));
 
 builder.Services.AddAuthorization();
 builder.Services.AddControllers();
