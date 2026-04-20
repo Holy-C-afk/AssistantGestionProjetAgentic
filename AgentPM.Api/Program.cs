@@ -1,5 +1,6 @@
-using AgentPM.Infrastructure.Persistence;
+using AgentPM.Api.Services;
 using AgentPM.Domain.Interfaces;
+using AgentPM.Infrastructure.Persistence;
 using AgentPM.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -13,6 +14,7 @@ builder.Services.AddScoped<IProjectRepository, ProjectRepository>();
 builder.Services.AddScoped<ISprintRepository, SprintRepository>();
 builder.Services.AddScoped<ISprintBoardRepository, SprintBoardRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<EventLogger>();
 
 
 // ── Database ──────────────────────────────────────────────
