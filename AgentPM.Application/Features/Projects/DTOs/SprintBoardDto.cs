@@ -17,5 +17,6 @@ public record BoardTaskDto(
     int? StoryPoints,
     Guid? AssigneeId,
     string? AssigneeName,
-    int Order
+    int Order,
+    int CommentCount
 );

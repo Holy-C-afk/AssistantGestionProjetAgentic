@@ -29,7 +29,8 @@ public class GetSprintBoardHandler : IRequestHandler<GetSprintBoardQuery, Sprint
                 t.StoryPoints,
                 t.AssigneeId,
                 t.Assignee?.FullName,
-                t.Order
+                t.Order,
+                t.Comments.Count
             )).ToList();
 
         return new SprintBoardDto(

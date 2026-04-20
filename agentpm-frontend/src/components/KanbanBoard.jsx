@@ -23,7 +23,14 @@ export default function KanbanBoard({ sprintId, projectId, onTaskClick, refreshK
     setLoading(true);
     try {
       const data = await getSprintBoard(projectId, sprintId);
-      setBoard(data);
+      const rawTasks = data.tasks ?? data.Tasks ?? [];
+      const columns = { todo: [], in_progress: [], done: [], blocked: [] };
+      rawTasks.forEach(t => {
+        const s = t.status ?? t.Status;
+        if (columns[s]) columns[s].push(t);
+        else columns[s] = [t];
+      });
+      setBoard({ ...data, columns });
     } catch (e) {
       console.error(e);
       setBoard(null);

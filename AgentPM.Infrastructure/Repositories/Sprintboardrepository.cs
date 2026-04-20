@@ -18,5 +18,7 @@ public class SprintBoardRepository : ISprintBoardRepository
         => await _db.Sprints
             .Include(s => s.Tasks)
                 .ThenInclude(t => t.Assignee)
+            .Include(s => s.Tasks)
+                .ThenInclude(t => t.Comments)
             .FirstOrDefaultAsync(s => s.Id == sprintId, ct);
 }
