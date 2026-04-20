@@ -27,8 +27,7 @@ export default function SprintSelector({ projectId, selectedSprintId, onSelect, 
     e.preventDefault();
     setFormError('');
     try {
-      const newSprint = await createSprint({
-        projectId,
+      const newSprint = await createSprint(projectId, {
         name: form.name,
         goal: form.goal || null,
         startDate: form.startDate || null,
@@ -48,7 +47,7 @@ export default function SprintSelector({ projectId, selectedSprintId, onSelect, 
     e.stopPropagation();
     if (!confirm('Clôturer ce sprint ?')) return;
     try {
-      await closeSprint(sprintId);
+      await closeSprint(projectId, sprintId);
       await fetchSprints();
     } catch (e) {
       console.error(e);
