@@ -47,8 +47,8 @@ export default function ProjectDetailPage() {
       const updated = await getProjectMembers(id);
       setMembers(updated);
       setNewUserId('');
-    } catch {
-      setError("Erreur lors de l'ajout du membre.");
+    } catch (e) {
+      setError(e?.response?.data?.message || "Erreur lors de l'ajout du membre.");
     }
   };
 

@@ -214,8 +214,23 @@ public class ProjectController : ControllerBase
     [HttpPost("{id:guid}/members")]
     public async Task<IActionResult> AddMember(Guid id, [FromBody] AddMemberRequest request)
     {
-        await _mediator.Send(new AddMemberCommand(id, request.UserId, request.Role));
-        return NoContent();
+        var userExists = await _db.Users.AnyAsync(u => u.Id == request.UserId);
+        if (!userExists)
+            return NotFound(new { message = "Utilisateur introuvable." });
+
+        try
+        {
+            await _mediator.Send(new AddMemberCommand(id, request.UserId, request.Role));
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
     }
 
     // DELETE api/project/{id}/members/{userId}
