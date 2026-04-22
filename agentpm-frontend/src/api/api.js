@@ -12,4 +12,16 @@ export const setAuthToken = (token) => {
   }
 };
 
+export const setUserId = (id) => {
+  if (id) {
+    api.defaults.headers.common['X-User-Id'] = id;
+  } else {
+    delete api.defaults.headers.common['X-User-Id'];
+  }
+};
+
+// Restore userId from session on page reload
+const storedUserId = sessionStorage.getItem('userId');
+if (storedUserId) api.defaults.headers.common['X-User-Id'] = storedUserId;
+
 export default api;

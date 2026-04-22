@@ -26,6 +26,9 @@ export const removeMember = (projectId, userId) =>
 
 export const getMe = () =>
   api.get('/auth/me').then(r => r.data);
+
+export const updateProjectStatus = (id, status) =>
+  api.patch(`/project/${id}/status`, { status }).then(r => r.data);
 export const downloadProjectPdf = async (id, projectName) => {
   const response = await api.get(`/project/${id}/pdf`, { responseType: 'blob' });
   const url = window.URL.createObjectURL(new Blob([response.data]));

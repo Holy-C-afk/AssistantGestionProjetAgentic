@@ -6,6 +6,7 @@ import {
   addMember,
   removeMember,
   updateProject,
+  updateProjectStatus,
   downloadProjectPdf,
 } from '../api/projectApi';
 import SprintSelector from '../components/SprintSelector';
@@ -82,6 +83,16 @@ export default function ProjectDetailPage() {
     }
   };
 
+  const handleStatusChange = async (newStatus) => {
+    if (!confirm(`Confirmer : passer le projet en « ${newStatus} » ?`)) return;
+    try {
+      const updated = await updateProjectStatus(id, newStatus);
+      setProject(p => ({ ...p, status: updated.status }));
+    } catch {
+      setError('Erreur lors du changement de statut.');
+    }
+  };
+
   const refreshBoard = () => setBoardRefreshKey(k => k + 1);
 
   if (!project) return (
@@ -107,20 +118,46 @@ export default function ProjectDetailPage() {
           >
             ← Retour aux projets
           </button>
-          <button
-            onClick={handleExportPdf}
-            disabled={pdfLoading}
-            className="flex items-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 hover:border-indigo-400 hover:text-indigo-600 transition disabled:opacity-50"
-          >
-            {pdfLoading ? (
-              <>
-                <span className="inline-block w-4 h-4 border-2 border-gray-300 border-t-indigo-600 rounded-full animate-spin" />
-                Génération...
-              </>
-            ) : (
-              <>📄 Exporter PDF</>
+          <div className="flex items-center gap-2">
+            {project?.status !== 'archived' && (
+              <button
+                onClick={() => handleStatusChange('archived')}
+                className="bg-yellow-50 border border-yellow-300 text-yellow-700 px-4 py-2 rounded-lg text-sm hover:bg-yellow-100 transition"
+              >
+                📦 Archiver
+              </button>
             )}
-          </button>
+            {project?.status !== 'completed' && (
+              <button
+                onClick={() => handleStatusChange('completed')}
+                className="bg-blue-50 border border-blue-300 text-blue-700 px-4 py-2 rounded-lg text-sm hover:bg-blue-100 transition"
+              >
+                ✅ Terminer
+              </button>
+            )}
+            {(project?.status === 'archived' || project?.status === 'completed') && (
+              <button
+                onClick={() => handleStatusChange('active')}
+                className="bg-green-50 border border-green-300 text-green-700 px-4 py-2 rounded-lg text-sm hover:bg-green-100 transition"
+              >
+                ▶ Réactiver
+              </button>
+            )}
+            <button
+              onClick={handleExportPdf}
+              disabled={pdfLoading}
+              className="flex items-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 hover:border-indigo-400 hover:text-indigo-600 transition disabled:opacity-50"
+            >
+              {pdfLoading ? (
+                <>
+                  <span className="inline-block w-4 h-4 border-2 border-gray-300 border-t-indigo-600 rounded-full animate-spin" />
+                  Génération...
+                </>
+              ) : (
+                <>📄 Exporter PDF</>
+              )}
+            </button>
+          </div>
         </div>
 
         {error && (

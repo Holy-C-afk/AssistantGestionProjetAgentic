@@ -1,7 +1,8 @@
 import { useIsAuthenticated } from '@azure/msal-react';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../auth/useAuth';
-import { setAuthToken } from '../api/api';
+import { setAuthToken, setUserId } from '../api/api';
+import { getMe } from '../api/projectApi';
 import LoginPage from '../pages/LoginPage';
 
 export default function AuthGuard({ children }) {
@@ -10,12 +11,22 @@ export default function AuthGuard({ children }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      getToken().then(token => {
-        if (token) setAuthToken(token);
-        setReady(true);
-      });
-    }
+    if (!isAuthenticated) return;
+    getToken().then(async token => {
+      if (token) {
+        setAuthToken(token);
+        try {
+          const user = await getMe();
+          setUserId(user.id);
+          sessionStorage.setItem('userId', user.id);
+          sessionStorage.setItem('userEmail', user.email);
+          sessionStorage.setItem('userName', user.fullName);
+        } catch (e) {
+          console.error('Auth/me failed', e);
+        }
+      }
+      setReady(true);
+    });
   }, [isAuthenticated]);
 
   if (!isAuthenticated) return <LoginPage />;
