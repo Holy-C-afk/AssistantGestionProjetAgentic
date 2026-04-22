@@ -5,7 +5,7 @@ using MediatR;
 
 namespace AgentPM.Application.Features.Projects.Handlers;
 
-public class GetMyProjectsHandler : IRequestHandler<GetMyProjectsQuery, List<ProjectDto>>
+public class GetMyProjectsHandler : IRequestHandler<GetMyProjectsQuery, PagedResult<ProjectDto>>
 {
     private readonly IProjectRepository _repo;
 
@@ -14,18 +14,16 @@ public class GetMyProjectsHandler : IRequestHandler<GetMyProjectsQuery, List<Pro
         _repo = repo;
     }
 
-    public async Task<List<ProjectDto>> Handle(GetMyProjectsQuery request, CancellationToken ct)
+    public async Task<PagedResult<ProjectDto>> Handle(GetMyProjectsQuery request, CancellationToken ct)
     {
-        var projects = await _repo.GetByMemberAsync(request.UserId, ct);
+        var (items, total) = await _repo.GetByMemberPagedAsync(
+            request.UserId, request.Page, request.PageSize, request.Search, request.Status, ct);
 
-        return projects.Select(p => new ProjectDto(
-            p.Id,
-            p.Name,
-            p.Description,
-            p.OwnerId,
-            p.Status,
-            p.CreatedAt,
-            p.Members.Count
-        )).ToList();
+        return new PagedResult<ProjectDto>(
+            items.Select(p => new ProjectDto(
+                p.Id, p.Name, p.Description, p.OwnerId, p.Status, p.CreatedAt, p.Members.Count
+            )).ToList(),
+            total
+        );
     }
 }

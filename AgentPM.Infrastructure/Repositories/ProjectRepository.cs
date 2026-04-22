@@ -35,6 +35,30 @@ public class ProjectRepository : IProjectRepository
             .Where(p => p.Members.Any(m => m.UserId == userId) && p.Status != "deleted")
             .ToListAsync(ct);
 
+    public async Task<(List<Project> Items, int Total)> GetByMemberPagedAsync(
+        Guid userId, int page, int pageSize, string? search, string? status, CancellationToken ct)
+    {
+        var query = _db.Projects
+            .Include(p => p.Members)
+            .Where(p => p.Members.Any(m => m.UserId == userId) && p.Status != "deleted");
+
+        if (!string.IsNullOrWhiteSpace(search))
+            query = query.Where(p => p.Name.Contains(search) ||
+                (p.Description != null && p.Description.Contains(search)));
+
+        if (!string.IsNullOrWhiteSpace(status))
+            query = query.Where(p => p.Status == status);
+
+        var total = await query.CountAsync(ct);
+        var items = await query
+            .OrderByDescending(p => p.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return (items, total);
+    }
+
     public async Task<List<ProjectMember>> GetMembersAsync(Guid projectId, CancellationToken ct)
         => await _db.ProjectMembers
             .Include(m => m.User)

@@ -24,9 +24,13 @@ public class ProjectController : ControllerBase
     Guid.Parse("b8886e34-aefb-4433-b59b-4d618fdb9e9f");
     // GET api/projects
     [HttpGet]
-    public async Task<IActionResult> GetMyProjects()
+    public async Task<IActionResult> GetMyProjects(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] string? search = null,
+        [FromQuery] string? status = null)
     {
-        var result = await _mediator.Send(new GetMyProjectsQuery(CurrentUserId));
+        var result = await _mediator.Send(new GetMyProjectsQuery(CurrentUserId, page, pageSize, search, status));
         return Ok(result);
     }
 

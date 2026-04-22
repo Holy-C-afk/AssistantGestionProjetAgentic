@@ -1,7 +1,7 @@
 import api from './api';
 
-export const getMyProjects = () =>
-  api.get('/project').then(r => r.data);
+export const getMyProjects = (params = {}) =>
+  api.get('/project', { params }).then(r => r.data);
 
 export const getProjectById = (id) =>
   api.get(`/project/${id}`).then(r => r.data);

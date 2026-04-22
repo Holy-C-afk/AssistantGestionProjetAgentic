@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getMyProjects, createProject } from '../api/projectApi';
 
-const PAGE_SIZE = 6;
+const PAGE_SIZE = 10;
 
 function getPageNumbers(current, total) {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
