@@ -12,6 +12,7 @@ import {
 import SprintSelector from '../components/SprintSelector';
 import KanbanBoard from '../components/KanbanBoard';
 import TaskDetailModal from '../components/TaskDetailModal';
+import AgentPanel from '../components/AgentPanel';
 
 export default function ProjectDetailPage() {
   const { id } = useParams();
@@ -309,6 +310,9 @@ export default function ProjectDetailPage() {
         )}
 
       </div>
+
+      {/* Floating AI assistant — scoped to this project */}
+      <AgentPanel projectId={id} />
     </div>
   );
 }
