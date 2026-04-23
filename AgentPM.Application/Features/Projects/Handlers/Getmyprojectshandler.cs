@@ -1,5 +1,6 @@
 ﻿using AgentPM.Application.Features.Projects.DTOs;
 using AgentPM.Application.Features.Projects.Queries;
+using AgentPM.Domain.Entities;
 using AgentPM.Domain.Interfaces;
 using MediatR;
 
@@ -16,7 +17,7 @@ public class GetMyProjectsHandler : IRequestHandler<GetMyProjectsQuery, PagedRes
 
     public async Task<PagedResult<ProjectDto>> Handle(GetMyProjectsQuery request, CancellationToken ct)
     {
-        var (items, total) = await _repo.GetByMemberPagedAsync(
+        (List<Project> items, int total) = await _repo.GetByMemberPagedAsync(
             request.UserId, request.Page, request.PageSize, request.Search, request.Status, ct);
 
         return new PagedResult<ProjectDto>(
