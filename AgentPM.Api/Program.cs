@@ -1,21 +1,24 @@
 using AgentPM.Api.Services;
+using AgentPM.Application.Agent;
+using AgentPM.Application.Tools;
 using AgentPM.Domain.Interfaces;
+using AgentPM.Infrastructure.Embeddings;
+using AgentPM.Infrastructure.LLM;
 using AgentPM.Infrastructure.Persistence;
 using AgentPM.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Identity.Web;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ── Repositories ──────────────────────────────────────────
 builder.Services.AddScoped<IProjectRepository, ProjectRepository>();
 builder.Services.AddScoped<ISprintRepository, SprintRepository>();
 builder.Services.AddScoped<ISprintBoardRepository, SprintBoardRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<EventLogger>();
-
 
 // ── Database ──────────────────────────────────────────────
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -48,6 +51,36 @@ builder.Services.AddMediatR(cfg =>
     cfg.RegisterServicesFromAssembly(
         typeof(AgentPM.Application.AssemblyReference).Assembly));
 
+// ── LLM / AI ─────────────────────────────────────────────
+builder.Services.Configure<AnthropicOptions>(
+    builder.Configuration.GetSection("Anthropic"));
+
+builder.Services.AddHttpClient("Anthropic", (sp, client) =>
+{
+    var opts = sp.GetRequiredService<IOptions<AnthropicOptions>>().Value;
+    client.BaseAddress = new Uri(opts.BaseUrl);
+    client.DefaultRequestHeaders.Add("x-api-key", opts.ApiKey);
+    client.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
+    client.Timeout = TimeSpan.FromSeconds(60);
+});
+
+builder.Services.AddHttpClient("Voyage", (sp, client) =>
+{
+    var opts = sp.GetRequiredService<IOptions<AnthropicOptions>>().Value;
+    client.BaseAddress = new Uri("https://api.voyageai.com");
+    client.DefaultRequestHeaders.Add("Authorization", $"Bearer {opts.VoyageApiKey}");
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
+
+builder.Services.AddScoped<ILLMClient, AnthropicClient>();
+builder.Services.AddScoped<IEmbeddingService, EmbeddingService>();
+builder.Services.AddScoped<IVectorSearchService, VectorSearchService>();
+builder.Services.AddScoped<DecomposeTool>();
+builder.Services.AddScoped<EstimateTool>();
+builder.Services.AddScoped<SearchTool>();
+builder.Services.AddScoped<AgentOrchestrator>();
+
+// ─────────────────────────────────────────────────────────
 builder.Services.AddAuthorization();
 builder.Services.AddControllers();
 

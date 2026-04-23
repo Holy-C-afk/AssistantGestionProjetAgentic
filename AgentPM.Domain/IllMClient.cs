@@ -1,10 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+namespace AgentPM.Domain.Interfaces;
 
-namespace AgentPM.Domain
+public interface ILLMClient
 {
-    internal class IllMClient
-    {
-    }
+    Task<string> GenerateAsync(string systemPrompt, string userPrompt, LLMSettings settings);
+    Task<ReadOnlyMemory<float>> GetEmbeddingsAsync(string text);
 }
