@@ -1,21 +1,23 @@
+using AgentPM.Api.Hubs;
 using AgentPM.Api.Services;
+using AgentPM.Application.Agent;
+using AgentPM.Application.Tools;
 using AgentPM.Domain.Interfaces;
+using AgentPM.Infrastructure.Embeddings;
+using AgentPM.Infrastructure.LLM;
 using AgentPM.Infrastructure.Persistence;
 using AgentPM.Infrastructure.Repositories;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Identity.Web;
-using Microsoft.IdentityModel.Tokens;
-using System.Text;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ── Repositories ──────────────────────────────────────────
 builder.Services.AddScoped<IProjectRepository, ProjectRepository>();
 builder.Services.AddScoped<ISprintRepository, SprintRepository>();
 builder.Services.AddScoped<ISprintBoardRepository, SprintBoardRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<EventLogger>();
-
 
 // ── Database ──────────────────────────────────────────────
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -25,36 +27,60 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     )
 );
 
-// ── Azure AD ──────────────────────────────────────────────
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.Authority = "https://login.microsoftonline.com/d6c5bbe2-0dd0-4148-a86c-ffe8f3e95c29";
-        options.Audience = "api://dbf4a5ac-a3e3-445c-b0fe-c44a997bb684";
-        options.TokenValidationParameters = new()
-        {
-            ValidateAudience = true,
-            ValidateIssuer = true,
-            ValidIssuers = new[]
-            {
-                "https://sts.windows.net/d6c5bbe2-0dd0-4148-a86c-ffe8f3e95c29/",
-                "https://login.microsoftonline.com/d6c5bbe2-0dd0-4148-a86c-ffe8f3e95c29/v2.0"
-            }
-        };
-    });
+// ── Azure AD auth is handled by the frontend (MSAL).
+// The backend trusts the X-User-Id and X-Azure-Email headers sent by the
+// authenticated frontend. JWT validation is omitted because the backend
+// cannot reach login.microsoftonline.com from this network environment.
+// ─────────────────────────────────────────────────────────────────────
 
 // ── MediatR ───────────────────────────────────────────────
 builder.Services.AddMediatR(cfg =>
     cfg.RegisterServicesFromAssembly(
         typeof(AgentPM.Application.AssemblyReference).Assembly));
 
-builder.Services.AddAuthorization();
+// ── LLM / AI ─────────────────────────────────────────────
+builder.Services.Configure<AnthropicOptions>(
+    builder.Configuration.GetSection("Anthropic"));
+
+builder.Services.AddHttpClient("Anthropic", (sp, client) =>
+{
+    var opts = sp.GetRequiredService<IOptions<AnthropicOptions>>().Value;
+    client.BaseAddress = new Uri(opts.BaseUrl);
+    client.DefaultRequestHeaders.Add("x-api-key", opts.ApiKey);
+    client.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
+    client.Timeout = TimeSpan.FromSeconds(60);
+});
+
+builder.Services.AddHttpClient("Voyage", (sp, client) =>
+{
+    var opts = sp.GetRequiredService<IOptions<AnthropicOptions>>().Value;
+    client.BaseAddress = new Uri("https://api.voyageai.com");
+    client.DefaultRequestHeaders.Add("Authorization", $"Bearer {opts.VoyageApiKey}");
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
+
+builder.Services.AddScoped<ILLMClient, AnthropicClient>();
+builder.Services.AddScoped<IEmbeddingService, EmbeddingService>();
+builder.Services.AddScoped<IVectorSearchService, VectorSearchService>();
+builder.Services.AddScoped<IAgentConversationRepository, AgentConversationRepository>();
+builder.Services.AddScoped<DecomposeTool>();
+builder.Services.AddScoped<EstimateTool>();
+builder.Services.AddScoped<SearchTool>();
+builder.Services.AddScoped<ReportTool>();
+builder.Services.AddScoped<AgentOrchestrator>();
+
+// ─────────────────────────────────────────────────────────
 builder.Services.AddControllers();
+
+// ── SignalR ───────────────────────────────────────────────
+builder.Services.AddSignalR();
 
 // ── CORS ──────────────────────────────────────────────────
 builder.Services.AddCors(options =>
     options.AddPolicy("Frontend", policy =>
-        policy.WithOrigins("http://localhost:5173")
+        policy.SetIsOriginAllowed(origin =>
+                  Uri.TryCreate(origin, UriKind.Absolute, out var uri) &&
+                  uri.Host == "localhost")
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials()));
@@ -62,9 +88,8 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 app.UseCors("Frontend");
-app.UseAuthentication();
-app.UseAuthorization();
 app.MapControllers();
+app.MapHub<AgentHub>("/hubs/agent");
 
 // ── Auto-migration ────────────────────────────────────────
 using (var scope = app.Services.CreateScope())

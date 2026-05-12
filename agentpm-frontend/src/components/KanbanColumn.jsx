@@ -2,10 +2,11 @@ import { useDroppable } from '@dnd-kit/core';
 import TaskCard from './TaskCard';
 
 const columnMeta = {
-  todo: { label: 'À faire', color: 'border-gray-300', dot: 'bg-gray-400' },
-  in_progress: { label: 'En cours', color: 'border-blue-300', dot: 'bg-blue-500' },
-  done: { label: 'Terminé', color: 'border-green-300', dot: 'bg-green-500' },
-  blocked: { label: 'Bloqué', color: 'border-red-300', dot: 'bg-red-500' },
+  todo:       { label: 'À faire',    color: 'border-gray-300',  dot: 'bg-gray-400'  },
+  clarifier:  { label: 'À clarifier', color: 'border-amber-300', dot: 'bg-amber-400' },
+  in_progress:{ label: 'En cours',   color: 'border-blue-300',  dot: 'bg-blue-500'  },
+  done:       { label: 'Terminé',    color: 'border-green-300', dot: 'bg-green-500' },
+  blocked:    { label: 'Bloqué',     color: 'border-red-300',   dot: 'bg-red-500'   },
 };
 
 export default function KanbanColumn({ status, tasks, onTaskClick, onAddTask }) {

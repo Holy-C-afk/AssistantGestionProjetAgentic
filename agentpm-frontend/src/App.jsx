@@ -3,6 +3,7 @@ import { MsalProvider } from '@azure/msal-react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { msalConfig } from './auth/authConfig';
 import AuthGuard from './components/AuthGuard';
+import Navbar from './components/Navbar';
 import ProjectsPage from './pages/ProjectsPage';
 import ProjectDetailPage from './pages/ProjectDetailPage';
 
@@ -13,6 +14,7 @@ export default function App() {
     <MsalProvider instance={msalInstance}>
       <BrowserRouter>
         <AuthGuard>
+          <Navbar />
           <Routes>
             <Route path="/" element={<ProjectsPage />} />
             <Route path="/projects/:id" element={<ProjectDetailPage />} />

@@ -123,10 +123,30 @@ public class TaskController : ControllerBase
             task.AssigneeId
         });
 
+        // ── Reopen sprint & project if a task is added to a closed sprint ─
+        bool sprintReopened    = false;
+        bool projectReactivated = false;
+        if (task.SprintId.HasValue)
+        {
+            var sprint = await _db.Sprints.FindAsync(task.SprintId.Value);
+            if (sprint is not null && sprint.Status == "closed")
+            {
+                sprint.Status  = "active";
+                sprintReopened = true;
+
+                var project = await _db.Projects.FindAsync(sprint.ProjectId);
+                if (project is not null && project.Status == "completed")
+                {
+                    project.Status     = "active";
+                    projectReactivated = true;
+                }
+            }
+        }
+
         await _db.SaveChangesAsync();
 
         return CreatedAtAction(nameof(GetById), new { id = task.Id },
-            await ToDto(task.Id));
+            new { task = await ToDto(task.Id), sprintReopened, projectReactivated });
     }
 
     // S3-4: UpdateTask
@@ -173,7 +193,7 @@ public class TaskController : ControllerBase
         var task = await _db.Tasks.FindAsync(id);
         if (task is null) return NotFound();
 
-        var validStatuses = new[] { "todo", "in_progress", "done", "blocked" };
+        var validStatuses = new[] { "todo", "clarifier", "in_progress", "done", "blocked" };
         if (!validStatuses.Contains(request.Status))
             return BadRequest(new { message = "Statut invalide." });
 
@@ -186,13 +206,70 @@ public class TaskController : ControllerBase
         {
             task.Id,
             From = fromStatus,
-            To = task.Status,
+            To   = task.Status,
             task.Order
         });
 
+        // ── Auto-close sprint when ALL its tasks are done ────────────────
+        bool sprintAutoClosed    = false;
+        bool projectAutoCompleted = false;
+
+        if (task.SprintId.HasValue && task.Status == "done")
+        {
+            // Count tasks in the same sprint that are NOT yet done
+            // (exclude the current task — it's already set to "done" in memory)
+            var pendingCount = await _db.Tasks
+                .CountAsync(t => t.SprintId == task.SprintId
+                              && t.Id       != task.Id
+                              && t.Status   != "done");
+
+            if (pendingCount == 0)
+            {
+                var sprint = await _db.Sprints.FindAsync(task.SprintId.Value);
+                if (sprint is not null && sprint.Status != "closed")
+                {
+                    sprint.Status    = "closed";
+                    sprintAutoClosed = true;
+
+                    await _events.AppendAsync(sprint.Id, "Sprint", "SprintAutoClosed", new
+                    {
+                        sprint.Id,
+                        Reason = "Toutes les tâches sont terminées"
+                    });
+
+                    // ── Auto-complete project when ALL its sprints are closed ──
+                    var openSprintCount = await _db.Sprints
+                        .CountAsync(s => s.ProjectId == sprint.ProjectId
+                                      && s.Id        != sprint.Id
+                                      && s.Status    != "closed");
+
+                    if (openSprintCount == 0)
+                    {
+                        var project = await _db.Projects.FindAsync(sprint.ProjectId);
+                        if (project is not null && project.Status == "active")
+                        {
+                            project.Status        = "completed";
+                            projectAutoCompleted  = true;
+
+                            await _events.AppendAsync(project.Id, "Project", "ProjectAutoCompleted", new
+                            {
+                                project.Id,
+                                Reason = "Tous les sprints sont clôturés"
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
         await _db.SaveChangesAsync();
 
-        return Ok(await ToDto(task.Id));
+        return Ok(new
+        {
+            task              = await ToDto(task.Id),
+            sprintAutoClosed,
+            projectAutoCompleted
+        });
     }
 
     // S3-4: DeleteTask
@@ -202,12 +279,68 @@ public class TaskController : ControllerBase
         var task = await _db.Tasks.FindAsync(id);
         if (task is null) return NotFound();
 
+        var sprintId = task.SprintId;
+
         _db.Tasks.Remove(task);
-
         await _events.AppendAsync(task.Id, "Task", "TaskDeleted", new { task.Id });
-
         await _db.SaveChangesAsync();
-        return NoContent();
+
+        // ── Auto-close sprint if all remaining tasks are done ────────────
+        bool sprintAutoClosed    = false;
+        bool projectAutoCompleted = false;
+
+        if (sprintId.HasValue)
+        {
+            var remainingCount = await _db.Tasks
+                .CountAsync(t => t.SprintId == sprintId.Value);
+
+            if (remainingCount > 0)
+            {
+                var doneCount = await _db.Tasks
+                    .CountAsync(t => t.SprintId == sprintId.Value && t.Status == "done");
+
+                if (remainingCount == doneCount)
+                {
+                    var sprint = await _db.Sprints.FindAsync(sprintId.Value);
+                    if (sprint is not null && sprint.Status != "closed")
+                    {
+                        sprint.Status    = "closed";
+                        sprintAutoClosed = true;
+
+                        await _events.AppendAsync(sprint.Id, "Sprint", "SprintAutoClosed", new
+                        {
+                            sprint.Id,
+                            Reason = "Toutes les tâches sont terminées"
+                        });
+
+                        var openSprintCount = await _db.Sprints
+                            .CountAsync(s => s.ProjectId == sprint.ProjectId
+                                          && s.Id       != sprint.Id
+                                          && s.Status   != "closed");
+
+                        if (openSprintCount == 0)
+                        {
+                            var project = await _db.Projects.FindAsync(sprint.ProjectId);
+                            if (project is not null && project.Status == "active")
+                            {
+                                project.Status        = "completed";
+                                projectAutoCompleted  = true;
+
+                                await _events.AppendAsync(project.Id, "Project", "ProjectAutoCompleted", new
+                                {
+                                    project.Id,
+                                    Reason = "Tous les sprints sont clôturés"
+                                });
+                            }
+                        }
+
+                        await _db.SaveChangesAsync();
+                    }
+                }
+            }
+        }
+
+        return Ok(new { sprintAutoClosed, projectAutoCompleted });
     }
 
     // S3-10: AddComment

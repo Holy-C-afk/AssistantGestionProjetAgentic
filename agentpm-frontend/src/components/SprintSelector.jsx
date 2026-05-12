@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { getSprints, createSprint, closeSprint } from '../api/sprintApi';
+import { getSprints, createSprint, closeSprint, deleteSprint } from '../api/sprintApi';
 
-export default function SprintSelector({ projectId, selectedSprintId, onSelect, onSprintsChange }) {
+export default function SprintSelector({ projectId, selectedSprintId, onSelect, onSprintsChange, refreshKey, onAutoRefresh }) {
   const [sprints, setSprints] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: '', goal: '', startDate: '', endDate: '' });
@@ -21,22 +21,34 @@ export default function SprintSelector({ projectId, selectedSprintId, onSelect, 
     }
   };
 
-  useEffect(() => { fetchSprints(); }, [projectId]);
+  useEffect(() => { fetchSprints(); }, [projectId, refreshKey]);
 
   const handleCreate = async (e) => {
     e.preventDefault();
     setFormError('');
+
+    // Client-side date validation
+    if (form.startDate && form.endDate && form.startDate >= form.endDate) {
+      setFormError('La date de début doit être antérieure à la date de fin.');
+      return;
+    }
+
     try {
-      const newSprint = await createSprint(projectId, {
+      const result = await createSprint(projectId, {
         name: form.name,
         goal: form.goal || null,
         startDate: form.startDate || null,
         endDate: form.endDate || null,
       });
+      // Backend now returns { sprint, projectReactivated }
+      const newSprint = result.sprint ?? result; // fallback for safety
       setForm({ name: '', goal: '', startDate: '', endDate: '' });
       setShowForm(false);
       await fetchSprints();
       onSelect(newSprint.id);
+      if (result.projectReactivated) {
+        onAutoRefresh?.({ projectReactivated: true });
+      }
     } catch (e) {
       console.error(e);
       setFormError(e?.response?.data?.message || 'Erreur lors de la création.');
@@ -49,6 +61,22 @@ export default function SprintSelector({ projectId, selectedSprintId, onSelect, 
     try {
       await closeSprint(projectId, sprintId);
       await fetchSprints();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDelete = async (sprintId, e) => {
+    e.stopPropagation();
+    if (!confirm('Supprimer ce sprint ? Les tâches seront déplacées vers le backlog.')) return;
+    try {
+      const result = await deleteSprint(projectId, sprintId);
+      // If the deleted sprint was selected, deselect it
+      if (selectedSprintId === sprintId) onSelect(null);
+      await fetchSprints();
+      if (result?.projectAutoCompleted) {
+        onAutoRefresh?.({ projectAutoCompleted: true });
+      }
     } catch (e) {
       console.error(e);
     }
@@ -149,15 +177,24 @@ export default function SprintSelector({ projectId, selectedSprintId, onSelect, 
                     {s.velocity > 0 && ` • ${s.velocity} pts`}
                   </p>
                 </div>
-                {s.status !== 'closed' && (
+                <div className="flex flex-col gap-1 shrink-0">
+                  {s.status !== 'closed' && (
+                    <button
+                      onClick={(e) => handleClose(s.id, e)}
+                      className="text-xs text-gray-400 hover:text-orange-500 shrink-0"
+                      title="Clôturer le sprint"
+                    >
+                      Clôturer
+                    </button>
+                  )}
                   <button
-                    onClick={(e) => handleClose(s.id, e)}
+                    onClick={(e) => handleDelete(s.id, e)}
                     className="text-xs text-gray-400 hover:text-red-500 shrink-0"
-                    title="Clôturer"
+                    title="Supprimer le sprint"
                   >
-                    Clôturer
+                    Supprimer
                   </button>
-                )}
+                </div>
               </div>
             </div>
           ))}

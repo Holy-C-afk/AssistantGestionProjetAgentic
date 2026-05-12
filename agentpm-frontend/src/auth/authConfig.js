@@ -15,7 +15,7 @@ export const loginRequest = {
     "openid",
     "profile",
     "email",
-    "api://dbf4a5ac-a3e3-445c-b0fe-c44a997bb684/access_as_user"
+    "api://dbf4a5ac-a3e3-445c-b0fe-c44a997bb684/access_as_user",
   ],
 };
 
@@ -23,4 +23,9 @@ export const apiRequest = {
   scopes: [
     "api://dbf4a5ac-a3e3-445c-b0fe-c44a997bb684/access_as_user"
   ],
+};
+
+// Microsoft Graph – used only to fetch the user's profile photo
+export const graphRequest = {
+  scopes: ["User.Read"],
 };

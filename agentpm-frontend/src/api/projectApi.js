@@ -1,5 +1,8 @@
 import api from './api';
 
+export const getUsers = (search = '') =>
+  api.get('/users', { params: search ? { search } : {} }).then(r => r.data);
+
 export const getMyProjects = (params = {}) =>
   api.get('/project', { params }).then(r => r.data);
 
@@ -21,11 +24,21 @@ export const getProjectMembers = (id) =>
 export const addMember = (projectId, data) =>
   api.post(`/project/${projectId}/members`, data).then(r => r.data);
 
+export const addMemberByEmail = (projectId, email, role = 'member') =>
+  api.post(`/project/${projectId}/members/by-email`, { email, role }).then(r => r.data);
+
 export const removeMember = (projectId, userId) =>
   api.delete(`/project/${projectId}/members/${userId}`).then(r => r.data);
 
-export const getMe = () =>
-  api.get('/auth/me').then(r => r.data);
+// azureEmail and azureName come from MSAL's account object (ID token — always reliable).
+// The backend prefers these over access-token claims, which may not carry preferred_username.
+export const getMe = (azureEmail = '', azureName = '') =>
+  api.get('/auth/me', {
+    headers: {
+      ...(azureEmail && { 'X-Azure-Email': azureEmail }),
+      ...(azureName  && { 'X-Azure-Name':  azureName  }),
+    },
+  }).then(r => r.data);
 
 export const updateProjectStatus = (id, status) =>
   api.patch(`/project/${id}/status`, { status }).then(r => r.data);

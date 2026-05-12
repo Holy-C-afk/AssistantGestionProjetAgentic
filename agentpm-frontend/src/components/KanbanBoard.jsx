@@ -5,9 +5,9 @@ import TaskCard from './TaskCard';
 import { getSprintBoard } from '../api/sprintApi';
 import { moveTask, createTask } from '../api/taskApi';
 
-const COLUMNS = ['todo', 'in_progress', 'done', 'blocked'];
+const COLUMNS = ['todo', 'clarifier', 'in_progress', 'done', 'blocked'];
 
-export default function KanbanBoard({ sprintId, projectId, onTaskClick, refreshKey }) {
+export default function KanbanBoard({ sprintId, projectId, onTaskClick, refreshKey, onAutoRefresh }) {
   const [board, setBoard] = useState(null);
   const [activeTask, setActiveTask] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -64,7 +64,11 @@ export default function KanbanBoard({ sprintId, projectId, onTaskClick, refreshK
     });
 
     try {
-      await moveTask(task.id, targetStatus);
+      const result = await moveTask(task.id, targetStatus);
+      // Backend signals that sprint or project status changed automatically
+      if (result?.sprintAutoClosed || result?.projectAutoCompleted) {
+        onAutoRefresh?.({ sprintAutoClosed: result.sprintAutoClosed, projectAutoCompleted: result.projectAutoCompleted });
+      }
     } catch (e) {
       console.error(e);
       fetchBoard();
@@ -74,7 +78,7 @@ export default function KanbanBoard({ sprintId, projectId, onTaskClick, refreshK
   const handleAdd = async () => {
     if (!newTitle.trim()) return;
     try {
-      await createTask({
+      const result = await createTask({
         projectId,
         sprintId,
         title: newTitle.trim(),
@@ -83,6 +87,10 @@ export default function KanbanBoard({ sprintId, projectId, onTaskClick, refreshK
       setNewTitle('');
       setShowAdd(false);
       fetchBoard();
+      // Sprint or project may have been reopened because a task was added to a closed sprint
+      if (result?.sprintReopened || result?.projectReactivated) {
+        onAutoRefresh?.({ sprintReopened: result.sprintReopened, projectReactivated: result.projectReactivated });
+      }
     } catch (e) {
       console.error(e);
     }

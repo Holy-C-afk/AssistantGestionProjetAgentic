@@ -32,7 +32,9 @@ public class ProjectRepository : IProjectRepository
     public async Task<List<Project>> GetByMemberAsync(Guid userId, CancellationToken ct)
         => await _db.Projects
             .Include(p => p.Members)
-            .Where(p => p.Members.Any(m => m.UserId == userId) && p.Status != "deleted")
+            .Where(p =>
+                (p.OwnerId == userId || p.Members.Any(m => m.UserId == userId))
+                && p.Status != "deleted")
             .ToListAsync(ct);
 
     public async Task<(List<Project> Items, int Total)> GetByMemberPagedAsync(
@@ -40,11 +42,12 @@ public class ProjectRepository : IProjectRepository
     {
         var query = _db.Projects
             .Include(p => p.Members)
-            .Where(p => p.Members.Any(m => m.UserId == userId) && p.Status != "deleted");
+            .Where(p =>
+                (p.OwnerId == userId || p.Members.Any(m => m.UserId == userId))
+                && p.Status != "deleted");
 
         if (!string.IsNullOrWhiteSpace(search))
-            query = query.Where(p => p.Name.Contains(search) ||
-                (p.Description != null && p.Description.Contains(search)));
+            query = query.Where(p => p.Name.Contains(search));
 
         if (!string.IsNullOrWhiteSpace(status))
             query = query.Where(p => p.Status == status);

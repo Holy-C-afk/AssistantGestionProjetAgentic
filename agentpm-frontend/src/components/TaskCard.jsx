@@ -30,7 +30,7 @@ export default function TaskCard({ task, onClick }) {
         // only open modal on click (not drag)
         if (!isDragging) onClick?.(task);
       }}
-      className={`bg-white rounded-lg border border-gray-200 p-3 mb-2 shadow-sm hover:shadow-md cursor-grab active:cursor-grabbing transition-shadow ${
+      className={`group bg-white rounded-lg border border-gray-200 p-3 mb-2 shadow-sm hover:shadow-md cursor-grab active:cursor-grabbing transition-shadow ${
         isDragging ? 'opacity-50' : ''
       }`}
     >
@@ -38,11 +38,25 @@ export default function TaskCard({ task, onClick }) {
         <h4 className="text-sm font-medium text-gray-900 leading-snug flex-1">
           {task.title}
         </h4>
-        {task.storyPoints != null && (
-          <span className="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full font-semibold shrink-0">
-            {task.storyPoints}
-          </span>
-        )}
+        <div className="flex items-center gap-1 shrink-0">
+          {task.storyPoints != null && (
+            <span className="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full font-semibold">
+              {task.storyPoints}
+            </span>
+          )}
+          {/* Edit button — stops drag so pointer events don't initiate a drag */}
+          <button
+            onPointerDown={e => e.stopPropagation()}
+            onClick={e => { e.stopPropagation(); onClick?.(task); }}
+            className="p-1 rounded hover:bg-indigo-50 text-gray-300 hover:text-indigo-500 transition opacity-0 group-hover:opacity-100"
+            title="Modifier"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {task.description && (

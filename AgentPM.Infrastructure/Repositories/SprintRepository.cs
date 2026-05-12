@@ -33,4 +33,14 @@ public class SprintRepository : ISprintRepository
         _db.Sprints.Update(sprint);
         await _db.SaveChangesAsync(ct);
     }
+
+    public async Task DeleteAsync(Guid id, CancellationToken ct)
+    {
+        var sprint = await _db.Sprints.FindAsync([id], ct);
+        if (sprint is not null)
+        {
+            _db.Sprints.Remove(sprint);
+            await _db.SaveChangesAsync(ct);
+        }
+    }
 }

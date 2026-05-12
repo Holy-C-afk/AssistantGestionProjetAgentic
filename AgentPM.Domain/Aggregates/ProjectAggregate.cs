@@ -19,13 +19,16 @@ public class ProjectAggregate
     {
         var project = new Project
         {
-            Name = name,
+            Name        = name,
             Description = description,
-            OwnerId = ownerId,
-            Status = "active"
+            OwnerId     = ownerId,
+            Status      = "active"
         };
 
         var aggregate = new ProjectAggregate(project);
+        // NOTE: the owner is added as a member by ProjectCreatedNotificationHandler
+        // (role = "owner"). Do NOT also add it here — that causes a duplicate-key
+        // EF tracking error (same {ProjectId, UserId} tracked twice before SaveChanges).
 
         aggregate._domainEvents.Add(new ProjectCreated(
             project.Id,

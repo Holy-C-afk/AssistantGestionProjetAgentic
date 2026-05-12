@@ -210,7 +210,7 @@ public class ProjectController : ControllerBase
         return Ok(result);
     }
 
-    // POST api/project/{id}/members
+    // POST api/project/{id}/members  (by userId — kept for internal use)
     [HttpPost("{id:guid}/members")]
     public async Task<IActionResult> AddMember(Guid id, [FromBody] AddMemberRequest request)
     {
@@ -233,6 +233,41 @@ public class ProjectController : ControllerBase
         }
     }
 
+    // POST api/project/{id}/members/by-email  (add member by Azure email)
+    [HttpPost("{id:guid}/members/by-email")]
+    public async Task<IActionResult> AddMemberByEmail(Guid id, [FromBody] AddMemberByEmailRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Email))
+            return BadRequest(new { message = "L'adresse email est requise." });
+
+        // Find the user by their Azure-registered email (case-insensitive)
+        var user = await _db.Users
+            .FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.Trim().ToLower());
+
+        if (user is null)
+            return NotFound(new
+            {
+                message = $"Aucun compte AgentPM pour « {request.Email} ». " +
+                          "Demandez à cet utilisateur de se connecter une première fois afin que son compte soit créé."
+            });
+
+        // Check duplicate membership
+        var alreadyMember = await _db.ProjectMembers
+            .AnyAsync(m => m.ProjectId == id && m.UserId == user.Id);
+        if (alreadyMember)
+            return Conflict(new { message = "Cet utilisateur est déjà membre du projet." });
+
+        try
+        {
+            await _mediator.Send(new AddMemberCommand(id, user.Id, request.Role));
+            return NoContent();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+    }
+
     // DELETE api/project/{id}/members/{userId}
     [HttpDelete("{id:guid}/members/{userId:guid}")]
     public async Task<IActionResult> RemoveMember(Guid id, Guid userId)
@@ -245,4 +280,5 @@ public class ProjectController : ControllerBase
 public record CreateProjectRequest(string Name, string? Description);
 public record UpdateProjectRequest(string Name, string? Description);
 public record AddMemberRequest(Guid UserId, string Role = "member");
+public record AddMemberByEmailRequest(string Email, string Role = "member");
 public record UpdateStatusRequest(string Status);

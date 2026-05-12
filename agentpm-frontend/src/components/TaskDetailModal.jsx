@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { getTask, updateTask, deleteTask, getTaskComments, addTaskComment, deleteTaskComment, createTask } from '../api/taskApi';
 import { agentEstimate, agentDecompose } from '../api/agentApi';
 
-export default function TaskDetailModal({ taskId, onClose, onUpdated }) {
+export default function TaskDetailModal({ taskId, members = [], onClose, onUpdated, onAutoRefresh }) {
   const [task, setTask]         = useState(null);
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
@@ -58,7 +58,14 @@ export default function TaskDetailModal({ taskId, onClose, onUpdated }) {
   const handleDelete = async () => {
     if (!confirm('Supprimer cette tâche ?')) return;
     try {
-      await deleteTask(taskId);
+      const result = await deleteTask(taskId);
+      // Auto-close sprint / project may have been triggered
+      if (result?.sprintAutoClosed || result?.projectAutoCompleted) {
+        onAutoRefresh?.({
+          sprintAutoClosed:    result.sprintAutoClosed,
+          projectAutoCompleted: result.projectAutoCompleted,
+        });
+      }
       onUpdated?.();
       onClose();
     } catch (e) { console.error(e); }
@@ -189,11 +196,31 @@ export default function TaskDetailModal({ taskId, onClose, onUpdated }) {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Assigné à (User ID)</label>
-                <input value={form.assigneeId} onChange={e => setForm({ ...form, assigneeId: e.target.value })}
-                  placeholder="UUID utilisateur"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                {task.assigneeName && <p className="text-xs text-gray-500 mt-1">Actuel : {task.assigneeName}</p>}
+                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Assigné à</label>
+                {members.length > 0 ? (
+                  <select
+                    value={form.assigneeId}
+                    onChange={e => setForm({ ...form, assigneeId: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="">— Non assigné —</option>
+                    {members.map(m => (
+                      <option key={m.userId} value={m.userId}>
+                        {m.fullName} ({m.email})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    value={form.assigneeId}
+                    onChange={e => setForm({ ...form, assigneeId: e.target.value })}
+                    placeholder="UUID utilisateur"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                )}
+                {task.assigneeName && !members.length && (
+                  <p className="text-xs text-gray-500 mt-1">Actuel : {task.assigneeName}</p>
+                )}
               </div>
 
               <div className="flex gap-3 pt-2 flex-wrap">

@@ -2,6 +2,7 @@ import axios from 'axios';
 
 const api = axios.create({
   baseURL: 'http://localhost:5157/api',
+  timeout: 30000, // 30 s — first request after backend restart can be slow (OIDC warm-up)
 });
 
 export const setAuthToken = (token) => {
