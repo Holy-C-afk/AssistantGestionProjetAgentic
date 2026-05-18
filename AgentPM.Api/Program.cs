@@ -67,6 +67,7 @@ builder.Services.AddScoped<DecomposeTool>();
 builder.Services.AddScoped<EstimateTool>();
 builder.Services.AddScoped<SearchTool>();
 builder.Services.AddScoped<ReportTool>();
+builder.Services.AddScoped<ProjectInfoTool>();
 builder.Services.AddScoped<AgentOrchestrator>();
 
 // ─────────────────────────────────────────────────────────

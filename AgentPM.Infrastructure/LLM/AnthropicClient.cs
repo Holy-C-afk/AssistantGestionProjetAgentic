@@ -208,6 +208,95 @@ public sealed class AnthropicClient : ILLMClient
         }
     }
 
+    // ── StreamWithHistoryAsync (SSE, full conversation, tool_choice=none) ────────
+    public async IAsyncEnumerable<string> StreamWithHistoryAsync(
+        string systemPrompt,
+        IReadOnlyList<LLMMessage> messages,
+        IReadOnlyList<LLMTool> tools,
+        LLMSettings settings,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var msgArray = messages.Select(m => new { role = m.Role, content = m.Content }).ToArray();
+        var toolsArray = tools.Select(t => new
+        {
+            name         = t.Name,
+            description  = t.Description,
+            input_schema = t.InputSchema
+        }).ToArray();
+
+        // tool_choice=none prevents the model from emitting <tool_call> markup in text
+        var payload = new
+        {
+            model       = settings.Model,
+            max_tokens  = settings.MaxTokens,
+            system      = systemPrompt,
+            stream      = true,
+            tool_choice = new { type = "none" },
+            tools       = toolsArray,
+            messages    = msgArray
+        };
+
+        var json           = JsonSerializer.Serialize(payload, JsonOpts);
+        var requestContent = new StringContent(json, Encoding.UTF8, "application/json");
+        var request        = new HttpRequestMessage(HttpMethod.Post, "/v1/messages")
+        {
+            Content = requestContent
+        };
+        request.Headers.Add("Accept", "text/event-stream");
+
+        string? earlyError = null;
+        HttpResponseMessage? response = null;
+        try
+        {
+            response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync(ct);
+                earlyError = $"[Anthropic error {(int)response.StatusCode}: {body}]";
+            }
+        }
+        catch (Exception ex)
+        {
+            earlyError = $"[Streaming error: {ex.Message}]";
+        }
+
+        if (earlyError is not null) { yield return earlyError; yield break; }
+
+        using var stream = await response!.Content.ReadAsStreamAsync(ct);
+        using var reader = new StreamReader(stream);
+
+        while (!ct.IsCancellationRequested)
+        {
+            var line = await reader.ReadLineAsync(ct);
+            if (line is null) break;
+            if (!line.StartsWith("data: ")) continue;
+
+            var data = line["data: ".Length..].Trim();
+            if (data == "[DONE]") break;
+
+            JsonDocument? eventDoc = null;
+            try { eventDoc = JsonDocument.Parse(data); }
+            catch { continue; }
+
+            using (eventDoc)
+            {
+                var root = eventDoc.RootElement;
+                if (!root.TryGetProperty("type", out var typeProp)) continue;
+                if (typeProp.GetString() != "content_block_delta") continue;
+
+                if (root.TryGetProperty("delta",   out var delta)     &&
+                    delta.TryGetProperty("type",    out var deltaType) &&
+                    deltaType.GetString() == "text_delta"              &&
+                    delta.TryGetProperty("text",    out var textProp))
+                {
+                    var token = textProp.GetString();
+                    if (!string.IsNullOrEmpty(token))
+                        yield return token;
+                }
+            }
+        }
+    }
+
     // ── GetEmbeddingsAsync ─────────────────────────────────────────────────────
     public async Task<ReadOnlyMemory<float>> GetEmbeddingsAsync(string text, CancellationToken ct = default)
     {

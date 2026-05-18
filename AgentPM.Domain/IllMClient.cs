@@ -13,8 +13,19 @@ public interface ILLMClient
         LLMSettings settings,
         CancellationToken ct = default);
 
-    /// <summary>Streams text tokens as an async sequence.</summary>
+    /// <summary>Streams text tokens as an async sequence (single-turn, no tools).</summary>
     IAsyncEnumerable<string> StreamAsync(string systemPrompt, string userPrompt, LLMSettings settings, CancellationToken ct = default);
+
+    /// <summary>
+    /// Streams the final answer using the full conversation history.
+    /// Sends tool_choice=none so the model never emits tool-call markup.
+    /// </summary>
+    IAsyncEnumerable<string> StreamWithHistoryAsync(
+        string systemPrompt,
+        IReadOnlyList<LLMMessage> messages,
+        IReadOnlyList<LLMTool> tools,
+        LLMSettings settings,
+        CancellationToken ct = default);
 
     /// <summary>Generates a vector embedding for the given text.</summary>
     Task<ReadOnlyMemory<float>> GetEmbeddingsAsync(string text, CancellationToken ct = default);

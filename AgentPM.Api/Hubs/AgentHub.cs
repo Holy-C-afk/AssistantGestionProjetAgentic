@@ -43,17 +43,18 @@ public class AgentHub : Hub
     }
 
     // ── ReAct loop streaming (tool_use + tokens) ─────────────────────────────
-    public async Task RunAgent(string message, string? projectId, string? conversationId)
+    public async Task RunAgent(string message, string? projectId, string? conversationId, string? sprintId = null)
     {
         var userId = GetUserId();
         var pid = Guid.TryParse(projectId, out var g) ? g : (Guid?)null;
+        var sid = Guid.TryParse(sprintId, out var sg) ? sg : (Guid?)null;
 
         if (Guid.TryParse(conversationId, out var convId) && userId.HasValue)
             await _mediator.Send(new AppendMessageCommand(convId, "user", message));
 
         var sb = new System.Text.StringBuilder();
 
-        await _orchestrator.RunReActAsync(message, pid, async evt =>
+        await _orchestrator.RunReActAsync(message, pid, sid, async evt =>
         {
             switch (evt.Kind)
             {

@@ -16,7 +16,7 @@ const SUGGESTIONS = [
   { label: '🐛 Gérer les blocages',      text: 'Comment gérer efficacement les tâches bloquées dans un sprint ?' },
 ];
 
-export default function AgentPanel({ projectId }) {
+export default function AgentPanel({ projectId, sprintId }) {
   const [open, setOpen]           = useState(false);
   const [tab, setTab]             = useState('chat');
   const [messages, setMessages]   = useState([{ role: 'assistant', content: WELCOME, id: 'welcome', showSuggestions: true }]);
@@ -27,11 +27,11 @@ export default function AgentPanel({ projectId }) {
   const [searching, setSearching] = useState(false);
   const [convId, setConvId]       = useState(null);
   const [hubState, setHubState]   = useState('disconnected');
-  const [activeToolCall, setActiveToolCall] = useState(null);
 
-  const hubRef    = useRef(null);
-  const bottomRef = useRef(null);
-  const streamBuf = useRef('');
+  const hubRef      = useRef(null);
+  const bottomRef   = useRef(null);
+  const streamBuf   = useRef('');
+  const streamIdRef = useRef(0); // unique id for each streaming message
 
   // ── Auto-scroll ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -68,23 +68,18 @@ export default function AgentPanel({ projectId }) {
     connection.on('StreamDone', () => {
       streamBuf.current = '';
       setStreaming(false);
-      setActiveToolCall(null);
       setMessages(prev => {
         const last = prev[prev.length - 1];
-        if (last?.streaming) return [...prev.slice(0, -1), { ...last, streaming: false }];
+        if (last?.streaming) return [...prev.slice(0, -1), { ...last, streaming: false, id: Date.now() }];
         return prev;
       });
     });
 
-    connection.on('AgentThinking', () => setActiveToolCall({ phase: 'thinking' }));
-    connection.on('AgentToolCall',  ({ tool, input: inp }) => setActiveToolCall({ tool, input: inp, phase: 'calling' }));
-    connection.on('AgentToolResult',({ tool }) => {
-      setActiveToolCall({ tool, phase: 'result' });
-      setTimeout(() => setActiveToolCall(null), 1200);
-    });
+    connection.on('AgentThinking', () => {});
+    connection.on('AgentToolCall',  () => {});
+    connection.on('AgentToolResult',() => {});
     connection.on('AgentError', (msg) => {
       setStreaming(false);
-      setActiveToolCall(null);
       streamBuf.current = '';
       setMessages(prev => [
         ...prev.filter(m => !m.streaming),
@@ -93,8 +88,8 @@ export default function AgentPanel({ projectId }) {
     });
 
     connection.onreconnecting(() => setHubState('connecting'));
-    connection.onreconnected(()   => setHubState('connected'));
-    connection.onclose(()         => { setHubState('disconnected'); hubRef.current = null; });
+    connection.onreconnected(() => setHubState('connected'));
+    connection.onclose(() => { setHubState('disconnected'); hubRef.current = null; });
 
     connection.start()
       .then(()  => { hubRef.current = connection; setHubState('connected'); })
@@ -124,15 +119,15 @@ export default function AgentPanel({ projectId }) {
     setMessages(prev => [...prev, { role: 'user', content: text, id: Date.now() }]);
     setStreaming(true);
     streamBuf.current = '';
-    setMessages(prev => [...prev, { role: 'assistant', content: '', streaming: true, id: 'stream' }]);
+    const streamId = `stream-${++streamIdRef.current}`;
+    setMessages(prev => [...prev, { role: 'assistant', content: '', streaming: true, id: streamId }]);
 
     const cid = await ensureConversation();
 
     if (hubRef.current?.state === signalR.HubConnectionState.Connected) {
-      hubRef.current.invoke('RunAgent', text, projectId ?? null, cid ?? null)
+      hubRef.current.invoke('RunAgent', text, projectId ?? null, cid ?? null, sprintId ?? null)
         .catch(err => {
           setStreaming(false);
-          setActiveToolCall(null);
           streamBuf.current = '';
           setMessages(prev => [
             ...prev.filter(m => !m.streaming),
@@ -259,20 +254,8 @@ export default function AgentPanel({ projectId }) {
                 </div>
               ))}
 
-              {/* Tool-call indicator */}
-              {activeToolCall && (
-                <div className="flex justify-start items-start gap-2">
-                  <div className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center text-sm shrink-0">⚙️</div>
-                  <div className="bg-purple-50 border border-purple-100 rounded-2xl rounded-tl-none px-3 py-2 text-xs text-purple-700 max-w-[78%]">
-                    {activeToolCall.phase === 'thinking' && <span className="italic">Réflexion en cours…</span>}
-                    {activeToolCall.phase === 'calling'  && <span>Appel outil <strong>{activeToolCall.tool}</strong>…</span>}
-                    {activeToolCall.phase === 'result'   && <span>✓ <strong>{activeToolCall.tool}</strong> terminé</span>}
-                  </div>
-                </div>
-              )}
-
               {/* Bouncing dots while waiting for first token */}
-              {streaming && !messages.find(m => m.streaming && m.content) && !activeToolCall && (
+              {streaming && !messages.find(m => m.streaming && m.content) && (
                 <div className="flex justify-start items-center gap-2">
                   <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-sm shrink-0">🤖</div>
                   <div className="bg-white border border-gray-100 rounded-2xl rounded-tl-none px-4 py-2.5 shadow-sm">

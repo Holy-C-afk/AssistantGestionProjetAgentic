@@ -48,13 +48,13 @@ public class ReportTool
             """;
 
         const string system = """
-            You are AgentPM, an agile coach. Given sprint data, write a concise 3–5 paragraph
-            progress report in French. Cover: overall progress, what is done, what is in progress,
-            risks or blockers if any, and a short recommendation for the team.
-            Be encouraging but honest.
+            You are AgentPM, an agile coach. Given sprint data, write a brief sprint status in 3-5 short sentences.
+            Plain text only — no markdown, no headers, no tables, no bullet points, no bold.
+            Cover: overall progress, what is done or in progress, one concrete next step.
+            Be direct. Reply in French.
             """;
 
-        var settings = new LLMSettings(MaxTokens: 800);
+        var settings = new LLMSettings(MaxTokens: 300);
         return await _llmClient.GenerateAsync(system, context, settings, ct);
     }
 }

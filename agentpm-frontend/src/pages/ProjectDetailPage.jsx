@@ -435,7 +435,7 @@ export default function ProjectDetailPage() {
       </div>
 
       {/* Floating AI assistant — scoped to this project */}
-      <AgentPanel projectId={id} />
+      <AgentPanel projectId={id} sprintId={selectedSprintId} />
     </div>
   );
 }

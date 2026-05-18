@@ -13,19 +13,22 @@ public class AgentOrchestrator
     private readonly EstimateTool _estimate;
     private readonly SearchTool _search;
     private readonly ReportTool _report;
+    private readonly ProjectInfoTool _projectInfo;
 
     public AgentOrchestrator(
         ILLMClient llmClient,
         DecomposeTool decompose,
         EstimateTool estimate,
         SearchTool search,
-        ReportTool report)
+        ReportTool report,
+        ProjectInfoTool projectInfo)
     {
         _llmClient = llmClient;
         _decompose = decompose;
         _estimate = estimate;
         _search = search;
         _report = report;
+        _projectInfo = projectInfo;
     }
 
     // ── Simple intent-routing (used by REST endpoints) ───────────────────────
@@ -75,6 +78,17 @@ public class AgentOrchestrator
     // ── ReAct loop (S4-7) — used by SignalR Hub for streaming ────────────────
     private static readonly IReadOnlyList<LLMTool> ReActTools = BuildTools();
 
+    // Separate system prompt used only for the final clean-answer streaming call.
+    // This avoids the LLM referencing tool names or methodology in its response.
+    private const string FinalAnswerSystem =
+        "You are AgentPM, an AI assistant for agile project management. " +
+        "Answer the user's question directly using the data provided. " +
+        "Rules: plain conversational text only — no markdown headers, no tables, no bullet lists, no horizontal rules, no bold/italic. " +
+        "Be brief: 2-4 short sentences maximum. " +
+        "Never mention tools, data sources, or how you retrieved information. " +
+        "Never offer follow-up suggestions or ask if the user needs more help. " +
+        "Reply in the same language as the user.";
+
     /// <summary>
     /// Runs a ReAct (Reason + Act) loop: the LLM decides which tools to call,
     /// we execute them and feed results back, then stream the final reply.
@@ -82,13 +96,19 @@ public class AgentOrchestrator
     public async Task RunReActAsync(
         string userMessage,
         Guid? projectId,
+        Guid? sprintId,
         Func<AgentStreamEvent, Task> onEvent,
         CancellationToken ct = default)
     {
-        const string system = """
+        var sprintContext = sprintId.HasValue
+            ? $"\nThe user is currently viewing sprint ID: {sprintId}. When asked about sprint summary or progress, call generate_report with this sprint_id directly."
+            : "";
+
+        var system = $"""
             You are AgentPM, an AI assistant for agile project management.
-            You have access to tools: estimate_task, decompose_task, search_tasks, generate_report.
-            Use them when relevant. Always reply in the same language as the user.
+            You have access to tools: estimate_task, decompose_task, search_tasks, generate_report, get_project_info.
+            Use get_project_info to answer questions about project members, sprints, or project overview.
+            Use them when relevant. Always reply in the same language as the user.{sprintContext}
             """;
 
         var messages = new List<LLMMessage>
@@ -96,7 +116,7 @@ public class AgentOrchestrator
             new("user", userMessage)
         };
 
-        var settings = new LLMSettings(MaxTokens: 1024);
+        var settings = new LLMSettings(MaxTokens: 512);
         const int maxLoops = 5;
 
         await onEvent(new AgentStreamEvent(AgentStreamEventKind.ThinkingStart));
@@ -107,10 +127,11 @@ public class AgentOrchestrator
 
             if (response.ToolUses.Count == 0 || response.StopReason == "end_turn")
             {
-                // Stream the final text token-by-token from a fresh streaming call
-                // Build a short context from messages so far
-                var finalUserMsg = BuildFinalUserContext(messages);
-                await foreach (var token in _llmClient.StreamAsync(system, finalUserMsg, settings, ct))
+                // Stream the final answer using the full message history so the model
+                // has the tool results in context. tool_choice=none prevents it from
+                // emitting raw <tool_call> markup in the streamed text.
+                await foreach (var token in _llmClient.StreamWithHistoryAsync(
+                    FinalAnswerSystem, messages, ReActTools, settings, ct))
                 {
                     await onEvent(new AgentStreamEvent(AgentStreamEventKind.Token, token));
                 }
@@ -134,7 +155,7 @@ public class AgentOrchestrator
                 await onEvent(new AgentStreamEvent(AgentStreamEventKind.ToolCall,
                     toolUse.Input.ToString(), toolUse.Name));
 
-                var result = await ExecuteToolAsync(toolUse, projectId, ct);
+                var result = await ExecuteToolAsync(toolUse, projectId, sprintId, ct);
 
                 await onEvent(new AgentStreamEvent(AgentStreamEventKind.ToolResult, result, toolUse.Name));
 
@@ -170,10 +191,18 @@ public class AgentOrchestrator
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    private async Task<string> ExecuteToolAsync(LLMToolUse toolUse, Guid? projectId, CancellationToken ct)
+    private async Task<string> ExecuteToolAsync(LLMToolUse toolUse, Guid? projectId, Guid? contextSprintId, CancellationToken ct)
     {
         try
         {
+            // Resolve the sprint ID: prefer what the LLM passed, fall back to the context sprint.
+            Guid? ResolveSprintId()
+            {
+                if (toolUse.Input.TryGetProperty("sprint_id", out var sid) && Guid.TryParse(sid.GetString(), out var parsed))
+                    return parsed;
+                return contextSprintId;
+            }
+
             return toolUse.Name switch
             {
                 "estimate_task" => (await _estimate.EstimateAsync(
@@ -192,46 +221,25 @@ public class AgentOrchestrator
                         projectId.Value, ct: ct))
                     .Select(t => t.Title)),
 
-                "generate_report" when toolUse.Input.TryGetProperty("sprint_id", out var sid)
-                    && Guid.TryParse(sid.GetString(), out var sprintId)
-                    => await _report.GenerateSprintReportAsync(sprintId, ct),
+                "generate_report" when ResolveSprintId() is Guid sid
+                    => await _report.GenerateSprintReportAsync(sid, ct),
 
-                _ => "Outil non disponible ou paramètres manquants."
+                "generate_report"
+                    => "No sprint selected. Please open a sprint first.",
+
+                "get_project_info" when projectId.HasValue
+                    => await _projectInfo.GetInfoAsync(
+                        projectId.Value,
+                        toolUse.Input.TryGetProperty("info_type", out var it) ? it.GetString() ?? "summary" : "summary",
+                        ct),
+
+                _ => "Tool not available or missing parameters."
             };
         }
         catch (Exception ex)
         {
-            return $"Erreur lors de l'exécution de {toolUse.Name}: {ex.Message}";
+            return $"Error executing {toolUse.Name}: {ex.Message}";
         }
-    }
-
-    private static string BuildFinalUserContext(List<LLMMessage> messages)
-    {
-        // Rebuild a plain-text prompt that includes the original user question
-        // plus any tool results gathered during the ReAct loop, so the final
-        // streaming call has all the facts it needs.
-        var parts = new List<string>();
-
-        foreach (var msg in messages)
-        {
-            if (msg.Role == "user" && msg.Content is string s && !string.IsNullOrEmpty(s))
-            {
-                parts.Add(s);
-            }
-            else if (msg.Role == "user" && msg.Content is List<object> blocks)
-            {
-                // Tool-result blocks — extract plain content strings
-                foreach (var block in blocks)
-                {
-                    var json = System.Text.Json.JsonSerializer.Serialize(block);
-                    using var doc = System.Text.Json.JsonDocument.Parse(json);
-                    if (doc.RootElement.TryGetProperty("content", out var c))
-                        parts.Add($"[Tool result]: {c.GetString()}");
-                }
-            }
-        }
-
-        return parts.Count > 0 ? string.Join("\n\n", parts) : "";
     }
 
     private static IReadOnlyList<LLMTool> BuildTools()
@@ -252,6 +260,9 @@ public class AgentOrchestrator
 
             new LLMTool("generate_report", "Generate a sprint progress report",
                 Schema("""{"type":"object","properties":{"sprint_id":{"type":"string","description":"UUID of the sprint"}},"required":["sprint_id"]}""")),
+
+            new LLMTool("get_project_info", "Get information about the current project: members, sprints, or a summary",
+                Schema("""{"type":"object","properties":{"info_type":{"type":"string","enum":["members","sprints","summary"],"description":"What to retrieve: members (team), sprints (sprint list), or summary (overview)"}},"required":["info_type"]}""")),
         ];
     }
 }
