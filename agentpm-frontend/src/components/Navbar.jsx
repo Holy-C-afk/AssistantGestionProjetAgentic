@@ -6,6 +6,7 @@ import { graphRequest } from '../auth/authConfig';
 import { fetchAndStorePhoto } from '../utils/graphPhoto';
 import { useAuth } from '../auth/useAuth';
 import NotificationCenter from './NotificationCenter';
+import { useTheme } from '../context/ThemeContext';
 
 export default function Navbar() {
   const { pathname }           = useLocation();
@@ -13,6 +14,7 @@ export default function Navbar() {
   const account                = accounts[0];
   const { logout }             = useAuth();
   const { t, i18n }            = useTranslation();
+  const { theme, toggleTheme } = useTheme();
 
   const userName  = sessionStorage.getItem('userName')  || '';
   const userEmail = sessionStorage.getItem('userEmail') || '';
@@ -58,8 +60,8 @@ export default function Navbar() {
   const firstName = userName.split(' ')[0];
 
   return (
-    <nav style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}
-      className="sticky top-0 z-40 backdrop-blur-sm bg-white/95">
+    <nav style={{ background: 'color-mix(in srgb, var(--surface) 95%, transparent)', borderBottom: '1px solid var(--border)' }}
+      className="sticky top-0 z-40 backdrop-blur-sm">
       <div className="max-w-7xl mx-auto px-6 flex items-center h-14 gap-6">
 
         {/* Logo */}
@@ -90,6 +92,26 @@ export default function Navbar() {
 
           {/* Notification bell */}
           <NotificationCenter />
+
+          {/* Theme toggle */}
+          <button
+            onClick={toggleTheme}
+            className="flex items-center justify-center w-8 h-8 rounded-lg border transition-all"
+            style={{ color: 'var(--text-2)', borderColor: 'var(--border)', background: 'var(--surface-2)' }}
+            title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
+          >
+            {theme === 'dark' ? (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+              </svg>
+            )}
+          </button>
 
           {/* Language toggle */}
           <button

@@ -8,8 +8,8 @@ export const updateSprintGoal = (projectId, sprintId, goal) =>
   api.patch(`/project/${projectId}/sprints/${sprintId}/goal`, { goal }).then(r => r.data);
 
 
-export const deleteSprint = (projectId, sprintId) =>
-  api.delete(`/project/${projectId}/sprints/${sprintId}`).then(r => r.data);
+export const deleteSprint = (projectId, sprintId, force = false) =>
+  api.delete(`/project/${projectId}/sprints/${sprintId}`, { params: force ? { force: true } : {} }).then(r => r.data);
 
 export const getSprintBoard = (projectId, sprintId) =>
   api.get(`/project/${projectId}/sprints/${sprintId}/board`).then(r => r.data);

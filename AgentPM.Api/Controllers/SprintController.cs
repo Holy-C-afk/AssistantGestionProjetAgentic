@@ -28,6 +28,24 @@ public class SprintController : ControllerBase
         _scopeFactory = scopeFactory;
     }
 
+    private Guid CurrentUserId
+    {
+        get
+        {
+            if (Request.Headers.TryGetValue("X-User-Id", out var v) && Guid.TryParse(v, out var id))
+                return id;
+            return Guid.Empty;
+        }
+    }
+
+    private async Task<string> GetProjectRoleAsync(Guid projectId, Guid userId)
+    {
+        var member = await _db.ProjectMembers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(m => m.ProjectId == projectId && m.UserId == userId);
+        return member?.Role ?? "member";
+    }
+
     // GET api/project/{projectId}/sprints
     [HttpGet]
     public async Task<IActionResult> GetSprints(Guid projectId)
@@ -103,24 +121,44 @@ public class SprintController : ControllerBase
 
     // DELETE api/project/{projectId}/sprints/{id}
     [HttpDelete("{id:guid}")]
-    public async Task<IActionResult> Delete(Guid projectId, Guid id)
+    public async Task<IActionResult> Delete(Guid projectId, Guid id, [FromQuery] bool force = false)
     {
         var sprint = await _db.Sprints
             .Include(s => s.Tasks)
             .FirstOrDefaultAsync(s => s.Id == id && s.ProjectId == projectId);
         if (sprint is null) return NotFound();
 
-        // Block deletion if any task is already started (not "todo")
+        // Block deletion if any task is already started (not "todo"), unless an admin/owner forces it
         var startedTasks = sprint.Tasks.Where(t => t.Status != "todo").ToList();
         if (startedTasks.Any())
-            return BadRequest(new
-            {
-                message = $"Impossible de supprimer : {startedTasks.Count} tâche(s) déjà commencée(s) ou terminée(s)."
-            });
+        {
+            if (!force)
+                return BadRequest(new
+                {
+                    message = $"Impossible de supprimer : {startedTasks.Count} tâche(s) déjà commencée(s) ou terminée(s).",
+                    requiresForce = true,
+                    startedCount  = startedTasks.Count,
+                });
+
+            var role = await GetProjectRoleAsync(projectId, CurrentUserId);
+            if (role != "admin" && role != "owner")
+                return StatusCode(403, new { message = "Seul le chef de projet peut forcer la suppression d'un sprint avec des tâches en cours." });
+        }
 
         // Move sprint tasks back to backlog (don't hard-delete them)
         foreach (var t in sprint.Tasks)
-            t.SprintId = null;
+        {
+            t.SprintId   = null;
+            t.UpdatedAt  = DateTime.UtcNow;
+        }
+
+        await _events.AppendAsync(sprint.Id, "Sprint", "SprintDeleted", new
+        {
+            sprint.Id,
+            sprint.Name,
+            Forced       = force && startedTasks.Any(),
+            TasksToBacklog = sprint.Tasks.Count,
+        });
 
         _db.Sprints.Remove(sprint);
         await _db.SaveChangesAsync();

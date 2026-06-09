@@ -98,7 +98,32 @@ export default function SprintSelector({
       await fetchSprints();
       if (result?.projectAutoCompleted) onAutoRefresh?.({ projectAutoCompleted: true });
     } catch (e) {
-      const msg = e?.response?.data?.message || t('sprint.errors.delete');
+      const data = e?.response?.data;
+
+      // If tasks already started block deletion and the user is an admin, offer to force it
+      if (data?.requiresForce && isAdmin) {
+        const ok = confirm(
+          `${data.message}\n\nForcer la suppression et renvoyer ${data.startedCount} tâche(s) (y compris en cours/terminées) dans le backlog ?`
+        );
+        if (ok) {
+          try {
+            const result = await deleteSprint(projectId, sprintId, true);
+            if (selectedSprintId === sprintId) onSelect(null);
+            await fetchSprints();
+            if (result?.projectAutoCompleted) onAutoRefresh?.({ projectAutoCompleted: true });
+            show({ type: 'success', title: t('sprint.toast.deleted', { defaultValue: 'Sprint supprimé' }) });
+            return;
+          } catch (e2) {
+            const msg2 = e2?.response?.data?.message || t('sprint.errors.delete');
+            setDeleteError(msg2);
+            show({ type: 'error', title: t('common.error'), description: msg2 });
+            return;
+          }
+        }
+        return;
+      }
+
+      const msg = data?.message || t('sprint.errors.delete');
       setDeleteError(msg);
       show({ type: 'error', title: t('common.error'), description: msg });
     }

@@ -28,6 +28,35 @@
   --radius:      8px;
   --radius-lg:   12px;
   --radius-xl:   16px;
+
+  color-scheme: light;
+}
+
+/* ── Dark mode overrides ───────────────────────────────────────── */
+:root[data-theme="dark"] {
+  --bg:          #14161A;
+  --surface:     #1C1F26;
+  --surface-2:   #262A33;
+  --border:      #333944;
+  --border-2:    #454C59;
+
+  --text-1:      #F1F1F2;
+  --text-2:      #A6ACBA;
+  --text-3:      #6B7280;
+
+  --accent:      #38BDF8;
+  --accent-h:    #0EA5E9;
+  --accent-light:#1A2C36;
+  --accent-text: #7DD3FC;
+
+  --success:     #4ADE80;
+  --success-bg:  #14291E;
+  --warning:     #FBBF24;
+  --warning-bg:  #2E2310;
+  --danger:      #F87171;
+  --danger-bg:   #2E1717;
+
+  color-scheme: dark;
 }
 
 /* ── Base ──────────────────────────────────────────────────────── */
