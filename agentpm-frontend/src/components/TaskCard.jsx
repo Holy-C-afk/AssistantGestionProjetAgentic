@@ -281,12 +281,15 @@ export default function TaskCard({ task, onClick, onPriorityChanged, isAdmin = t
     finally { setSaving(false); }
   };
 
-  /* Open priority menu */
+  /* Open priority menu — opens upward if not enough space below */
   const openPrioMenu = (e) => {
     e.stopPropagation();
     if (showPrioMenu) { setShowPrioMenu(false); return; }
     const rect = e.currentTarget.getBoundingClientRect();
-    setPrioMenuPos({ top: rect.bottom + 6, left: rect.left });
+    const popHeight = 156; // 4 items × ~34px + 8px padding
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const top = spaceBelow >= popHeight + 8 ? rect.bottom + 6 : rect.top - popHeight - 6;
+    setPrioMenuPos({ top, left: rect.left });
     setShowPrioMenu(true);
   };
 

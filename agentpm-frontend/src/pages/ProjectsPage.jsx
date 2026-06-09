@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getMyProjects, createProject, deleteProject } from '../api/projectApi';
@@ -82,6 +82,7 @@ export default function ProjectsPage() {
   const [search,      setSearch]      = useState('');
   const [status,      setStatus]      = useState('');
   const [searchInput, setSearchInput] = useState('');
+  const [refreshKey,  setRefreshKey]  = useState(0);
   const [showModal,    setShowModal]    = useState(false);
   const [form,         setForm]         = useState({ name: '', description: '' });
   const [loading,      setLoading]      = useState(false);
@@ -89,6 +90,23 @@ export default function ProjectsPage() {
   const [error,        setError]        = useState('');
   const [deletingId,   setDeletingId]   = useState(null);
   const [confirmId,    setConfirmId]    = useState(null);
+
+  // Debounce: update `search` 300ms after the user stops typing
+  const debounceRef = useRef(null);
+  const handleSearchInput = (val) => {
+    setSearchInput(val);
+    clearTimeout(debounceRef.current);
+    if (val === '') {
+      // Clear immediately — no delay
+      setSearch('');
+      setPage(1);
+    } else {
+      debounceRef.current = setTimeout(() => {
+        setSearch(val);
+        setPage(1);
+      }, 300);
+    }
+  };
 
   const totalPages     = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const activeCount    = projects.filter(p => p.status === 'active').length;
@@ -111,18 +129,23 @@ export default function ProjectsPage() {
       setError(t('projects.errors.load'));
       setProjects([]); setTotal(0);
     } finally { setFetching(false); }
-  }, [page, status, search, t]);
+  }, [page, status, search, refreshKey, t]); // refreshKey forces re-fetch when incremented
 
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
 
   const handleSearch = (e) => { e.preventDefault(); setSearch(searchInput); setPage(1); };
-  const handleClear  = () => { setSearch(''); setSearchInput(''); setStatus(''); setPage(1); };
+  const handleClear  = () => {
+    clearTimeout(debounceRef.current);
+    setSearch(''); setSearchInput(''); setStatus(''); setPage(1);
+  };
   const handleCreate = async (e) => {
     e.preventDefault(); setLoading(true); setError('');
     try {
       await createProject(form);
-      setShowModal(false); setForm({ name: '', description: '' }); setPage(1);
-      await fetchProjects();
+      setShowModal(false);
+      setForm({ name: '', description: '' });
+      setPage(1);
+      setRefreshKey(k => k + 1); // guaranteed re-fetch even if page was already 1
     } catch { setError(t('projects.errors.create')); }
     finally { setLoading(false); }
   };
@@ -191,7 +214,7 @@ export default function ProjectsPage() {
 
         {/* Filter bar */}
         <div className="flex flex-col sm:flex-row gap-3 mb-6">
-          <form onSubmit={handleSearch} className="flex gap-2 flex-1">
+          <div className="flex gap-2 flex-1">
             <div className="relative flex-1">
               <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--text-3)' }}>
                 <IconSearch />
@@ -200,9 +223,9 @@ export default function ProjectsPage() {
                 type="text"
                 placeholder={t('projects.searchPlaceholder')}
                 value={searchInput}
-                onChange={e => setSearchInput(e.target.value)}
+                onChange={e => handleSearchInput(e.target.value)}
                 onKeyDown={e => e.key === 'Escape' && handleClear()}
-                className="w-full pl-10 pr-3 py-2.5 text-sm rounded-xl border outline-none transition-all"
+                className="w-full pl-10 pr-9 py-2.5 text-sm rounded-xl border outline-none transition-all"
                 style={{
                   background: 'var(--surface)', borderColor: 'var(--border)',
                   color: 'var(--text-1)',
@@ -210,15 +233,20 @@ export default function ProjectsPage() {
                 onFocus={e => e.target.style.borderColor = 'var(--accent)'}
                 onBlur={e => e.target.style.borderColor = 'var(--border)'}
               />
+              {/* Inline clear ✕ button */}
+              {searchInput && (
+                <button
+                  onClick={handleClear}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center rounded-full transition-colors"
+                  style={{ color: 'var(--text-3)' }}
+                  onMouseEnter={e => e.currentTarget.style.color = 'var(--text-1)'}
+                  onMouseLeave={e => e.currentTarget.style.color = 'var(--text-3)'}
+                >
+                  <IconX />
+                </button>
+              )}
             </div>
-            {searchInput && (
-              <button type="submit"
-                className="px-4 py-2.5 rounded-xl text-sm font-medium text-white shrink-0 transition-colors"
-                style={{ background: 'var(--accent)' }}>
-                {t('projects.search')}
-              </button>
-            )}
-          </form>
+          </div>
 
           {/* Status pills */}
           <div className="flex gap-1.5 flex-wrap">

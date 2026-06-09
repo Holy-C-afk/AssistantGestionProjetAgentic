@@ -47,7 +47,7 @@ public class ProjectRepository : IProjectRepository
                 && p.Status != "deleted");
 
         if (!string.IsNullOrWhiteSpace(search))
-            query = query.Where(p => p.Name.Contains(search));
+            query = query.Where(p => EF.Functions.ILike(p.Name, $"%{search}%"));
 
         if (!string.IsNullOrWhiteSpace(status))
             query = query.Where(p => p.Status == status);
