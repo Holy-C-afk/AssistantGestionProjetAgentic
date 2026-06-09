@@ -129,8 +129,8 @@ export default function ProjectDetailPage() {
 
   const refreshBoard = () => setBoardRefreshKey(k => k + 1);
 
-  const handleAutoRefresh = ({ sprintAutoClosed, projectAutoCompleted, sprintReopened, projectReactivated } = {}) => {
-    if (sprintAutoClosed || sprintReopened) setSprintRefreshKey(k => k + 1);
+  const handleAutoRefresh = ({ sprintAutoClosed, projectAutoCompleted, sprintReopened, projectReactivated, sprintActivated } = {}) => {
+    if (sprintAutoClosed || sprintReopened || sprintActivated) setSprintRefreshKey(k => k + 1);
     if (sprintAutoClosed || sprintReopened || projectAutoCompleted || projectReactivated) {
       getProjectById(id).then(p => setProject(p)).catch(console.error);
     }

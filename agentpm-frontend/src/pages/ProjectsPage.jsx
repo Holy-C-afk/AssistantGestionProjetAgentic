@@ -234,7 +234,9 @@ export default function ProjectsPage() {
     try {
       await updateProjectStatus(id, 'archived');
       setRefreshKey(k => k + 1);
-    } catch { setError('Erreur lors de l\'archivage.'); }
+    } catch (e) {
+      setError(e?.response?.data?.message || 'Erreur lors de l\'archivage.');
+    }
     finally { setArchivingId(null); }
   };
 

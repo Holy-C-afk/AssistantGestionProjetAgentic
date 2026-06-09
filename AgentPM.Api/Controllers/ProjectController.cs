@@ -279,8 +279,19 @@ public class ProjectController : ControllerBase
         if (!allowed.Contains(request.Status))
             return BadRequest(new { message = "Statut invalide." });
 
-        var project = await _db.Projects.FindAsync(id);
+        var project = await _db.Projects
+            .Include(p => p.Members)
+            .FirstOrDefaultAsync(p => p.Id == id);
         if (project is null) return NotFound();
+
+        // Only the chef de projet (admin/owner) can archive a project
+        if (request.Status == "archived")
+        {
+            var member  = project.Members.FirstOrDefault(m => m.UserId == CurrentUserId);
+            var isAdmin = member?.Role is "admin" or "owner" || project.OwnerId == CurrentUserId;
+            if (!isAdmin)
+                return StatusCode(403, new { message = "Seul le chef de projet peut archiver ce projet." });
+        }
 
         project.Status    = request.Status;
         project.UpdatedAt = DateTime.UtcNow;

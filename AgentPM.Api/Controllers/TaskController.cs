@@ -324,9 +324,27 @@ public class TaskController : ControllerBase
         bool projectAutoCompleted = false;
         bool sprintReopened       = false;
         bool projectReactivated   = false;
+        bool sprintActivated      = false;
 
         if (task.SprintId.HasValue)
         {
+            // ── A task starts moving (in_progress, done, blocked, clarifier) → sprint leaves "planned" ──
+            if (task.Status != "todo")
+            {
+                var sprint = await _db.Sprints.FindAsync(task.SprintId.Value);
+                if (sprint is not null && sprint.Status == "planned")
+                {
+                    sprint.Status   = "active";
+                    sprintActivated = true;
+
+                    await _events.AppendAsync(sprint.Id, "Sprint", "SprintActivated", new
+                    {
+                        sprint.Id,
+                        Reason = "Une tâche du sprint a démarré"
+                    });
+                }
+            }
+
             // ── Moving a task OUT of "done" → reopen closed sprint ────────────
             if (fromStatus == "done" && activeStatuses.Contains(task.Status))
             {
@@ -416,7 +434,8 @@ public class TaskController : ControllerBase
             sprintAutoClosed,
             projectAutoCompleted,
             sprintReopened,
-            projectReactivated
+            projectReactivated,
+            sprintActivated
         });
     }
 

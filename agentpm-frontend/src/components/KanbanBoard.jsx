@@ -76,12 +76,13 @@ export default function KanbanBoard({ sprintId, projectId, onTaskClick, refreshK
     try {
       const result = await moveTask(task.id, targetStatus);
       if (result?.sprintAutoClosed || result?.projectAutoCompleted
-          || result?.sprintReopened || result?.projectReactivated) {
+          || result?.sprintReopened || result?.projectReactivated || result?.sprintActivated) {
         onAutoRefresh?.({
           sprintAutoClosed:     result.sprintAutoClosed,
           projectAutoCompleted: result.projectAutoCompleted,
           sprintReopened:       result.sprintReopened,
           projectReactivated:   result.projectReactivated,
+          sprintActivated:      result.sprintActivated,
         });
       }
     } catch (e) {
