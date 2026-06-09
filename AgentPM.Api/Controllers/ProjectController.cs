@@ -1,3 +1,4 @@
+using AgentPM.Api.Services;
 using AgentPM.Application.Features.Projects.Commands;
 using AgentPM.Application.Features.Projects.Queries;
 using AgentPM.Infrastructure.Persistence;
@@ -16,11 +17,13 @@ public class ProjectController : ControllerBase
 {
     private readonly IMediator _mediator;
     private readonly AppDbContext _db;
+    private readonly NotificationService _notifications;
 
-    public ProjectController(IMediator mediator, AppDbContext db)
+    public ProjectController(IMediator mediator, AppDbContext db, NotificationService notifications)
     {
         _mediator = mediator;
         _db = db;
+        _notifications = notifications;
     }
 
     private Guid CurrentUserId
@@ -326,6 +329,15 @@ public class ProjectController : ControllerBase
         try
         {
             await _mediator.Send(new AddMemberCommand(id, request.UserId, request.Role));
+
+            var project = await _db.Projects.FindAsync(id);
+            await _notifications.SendAsync(
+                request.UserId,
+                "Ajouté à un projet",
+                $"Vous avez été ajouté au projet \"{project?.Name}\" en tant que {request.Role}.",
+                "member_added",
+                projectId: id);
+
             return NoContent();
         }
         catch (InvalidOperationException ex)
@@ -365,6 +377,15 @@ public class ProjectController : ControllerBase
         try
         {
             await _mediator.Send(new AddMemberCommand(id, user.Id, request.Role));
+
+            var project = await _db.Projects.FindAsync(id);
+            await _notifications.SendAsync(
+                user.Id,
+                "Ajouté à un projet",
+                $"Vous avez été ajouté au projet \"{project?.Name}\" en tant que {request.Role}.",
+                "member_added",
+                projectId: id);
+
             return NoContent();
         }
         catch (KeyNotFoundException ex)

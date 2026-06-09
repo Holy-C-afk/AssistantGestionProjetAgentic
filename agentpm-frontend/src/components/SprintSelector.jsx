@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getSprints, createSprint, closeSprint, deleteSprint, updateSprintDates } from '../api/sprintApi';
 import { useToast } from '../context/ToastContext';
+import ConfirmDialog from './ConfirmDialog';
 
 const SPRINT_STATUS_STYLE = {
   planned:   { bg: '#EFF9FB', text: '#0E7490' },
@@ -23,6 +24,7 @@ export default function SprintSelector({
   const [editDates, setEditDates] = useState({ startDate: '', endDate: '' });
   const [deleteError, setDeleteError] = useState('');
   const [closeError,  setCloseError]  = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState(null);
   const { show } = useToast();
 
   const fetchSprints = async () => {
@@ -74,9 +76,17 @@ export default function SprintSelector({
     }
   };
 
-  const handleClose = async (sprintId, e) => {
+  const handleClose = (sprintId, e) => {
     e.stopPropagation(); setCloseError(null);
-    if (!confirm(t('sprint.confirmClose'))) return;
+    setConfirmDialog({
+      title:        t('sprint.confirmClose'),
+      confirmLabel: t('sprint.actions.close', { defaultValue: 'Clôturer' }),
+      onConfirm:    () => doClose(sprintId),
+    });
+  };
+
+  const doClose = async (sprintId) => {
+    setConfirmDialog(null);
     try {
       await closeSprint(projectId, sprintId);
       await fetchSprints();
@@ -89,37 +99,36 @@ export default function SprintSelector({
     }
   };
 
-  const handleDelete = async (sprintId, e) => {
+  const handleDelete = (sprintId, e) => {
     e.stopPropagation(); setDeleteError('');
-    if (!confirm(t('sprint.confirmDelete'))) return;
+    setConfirmDialog({
+      title:        t('sprint.confirmDelete'),
+      danger:       true,
+      confirmLabel: t('common.delete'),
+      onConfirm:    () => doDelete(sprintId, false),
+    });
+  };
+
+  const doDelete = async (sprintId, force) => {
+    setConfirmDialog(null);
     try {
-      const result = await deleteSprint(projectId, sprintId);
+      const result = await deleteSprint(projectId, sprintId, force);
       if (selectedSprintId === sprintId) onSelect(null);
       await fetchSprints();
       if (result?.projectAutoCompleted) onAutoRefresh?.({ projectAutoCompleted: true });
+      if (force) show({ type: 'success', title: t('sprint.toast.deleted', { defaultValue: 'Sprint supprimé' }) });
     } catch (e) {
       const data = e?.response?.data;
 
       // If tasks already started block deletion and the user is an admin, offer to force it
       if (data?.requiresForce && isAdmin) {
-        const ok = confirm(
-          `${data.message}\n\nForcer la suppression et renvoyer ${data.startedCount} tâche(s) (y compris en cours/terminées) dans le backlog ?`
-        );
-        if (ok) {
-          try {
-            const result = await deleteSprint(projectId, sprintId, true);
-            if (selectedSprintId === sprintId) onSelect(null);
-            await fetchSprints();
-            if (result?.projectAutoCompleted) onAutoRefresh?.({ projectAutoCompleted: true });
-            show({ type: 'success', title: t('sprint.toast.deleted', { defaultValue: 'Sprint supprimé' }) });
-            return;
-          } catch (e2) {
-            const msg2 = e2?.response?.data?.message || t('sprint.errors.delete');
-            setDeleteError(msg2);
-            show({ type: 'error', title: t('common.error'), description: msg2 });
-            return;
-          }
-        }
+        setConfirmDialog({
+          title:        'Suppression impossible',
+          message:      `${data.message}\n\nForcer la suppression et renvoyer ${data.startedCount} tâche(s) (y compris en cours/terminées) dans le backlog ?`,
+          danger:       true,
+          confirmLabel: 'Forcer la suppression',
+          onConfirm:    () => doDelete(sprintId, true),
+        });
         return;
       }
 
@@ -349,6 +358,16 @@ export default function SprintSelector({
           })
         )}
       </div>
+
+      <ConfirmDialog
+        open={!!confirmDialog}
+        title={confirmDialog?.title}
+        message={confirmDialog?.message}
+        confirmLabel={confirmDialog?.confirmLabel}
+        danger={confirmDialog?.danger}
+        onConfirm={confirmDialog?.onConfirm}
+        onCancel={() => setConfirmDialog(null)}
+      />
     </div>
   );
 }

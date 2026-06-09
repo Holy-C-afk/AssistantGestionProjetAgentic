@@ -18,14 +18,17 @@ public class TaskController : ControllerBase
     private readonly EventLogger         _events;
     private readonly IEmailService       _email;
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly NotificationService _notifications;
 
     public TaskController(AppDbContext db, EventLogger events,
-                          IEmailService email, IServiceScopeFactory scopeFactory)
+                          IEmailService email, IServiceScopeFactory scopeFactory,
+                          NotificationService notifications)
     {
         _db           = db;
         _events       = events;
         _email        = email;
         _scopeFactory = scopeFactory;
+        _notifications = notifications;
     }
 
     private Guid CurrentUserId
@@ -269,6 +272,19 @@ public class TaskController : ControllerBase
                         Console.Error.WriteLine($"[TaskAssigned email] {ex.Message}");
                     }
                 });
+
+                // In-app / real-time notifications for newly assigned users
+                foreach (var u in assigneeUsers)
+                {
+                    await _notifications.SendAsync(
+                        u.Id,
+                        "Nouvelle tâche assignée",
+                        $"\"{taskTitle}\" vous a été assignée par {assignerName} ({projectName} — {sprintName}).",
+                        "task_assigned",
+                        projectId: task.ProjectId,
+                        sprintId:  task.SprintId,
+                        taskId:    task.Id);
+                }
             }
         }
 

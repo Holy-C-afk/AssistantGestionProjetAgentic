@@ -17,15 +17,18 @@ public class SprintController : ControllerBase
     private readonly EventLogger          _events;
     private readonly IEmailService        _email;
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly NotificationService  _notifications;
 
     public SprintController(IMediator mediator, AppDbContext db, EventLogger events,
-                             IEmailService email, IServiceScopeFactory scopeFactory)
+                             IEmailService email, IServiceScopeFactory scopeFactory,
+                             NotificationService notifications)
     {
         _mediator     = mediator;
         _db           = db;
         _events       = events;
         _email        = email;
         _scopeFactory = scopeFactory;
+        _notifications = notifications;
     }
 
     private Guid CurrentUserId
@@ -146,6 +149,14 @@ public class SprintController : ControllerBase
         }
 
         // Move sprint tasks back to backlog (don't hard-delete them)
+        var affectedAssigneeIds = sprint.Tasks
+            .SelectMany(t => t.AssigneeIds.Append(t.AssigneeId ?? Guid.Empty))
+            .Where(uid => uid != Guid.Empty)
+            .Distinct()
+            .ToList();
+        var sprintName  = sprint.Name;
+        var wasForced   = force && startedTasks.Any();
+
         foreach (var t in sprint.Tasks)
         {
             t.SprintId   = null;
@@ -156,12 +167,26 @@ public class SprintController : ControllerBase
         {
             sprint.Id,
             sprint.Name,
-            Forced       = force && startedTasks.Any(),
+            Forced       = wasForced,
             TasksToBacklog = sprint.Tasks.Count,
         });
 
         _db.Sprints.Remove(sprint);
         await _db.SaveChangesAsync();
+
+        // Notify assignees whose in-progress/done tasks were moved back to backlog
+        if (wasForced)
+        {
+            foreach (var uid in affectedAssigneeIds)
+            {
+                await _notifications.SendAsync(
+                    uid,
+                    "Sprint supprimé",
+                    $"Le sprint \"{sprintName}\" a été supprimé par un chef de projet. Vos tâches ont été remises dans le backlog.",
+                    "sprint_closed",
+                    projectId: projectId);
+            }
+        }
 
         // ── Auto-complete project if all remaining sprints are closed ────
         bool projectAutoCompleted = false;
@@ -173,7 +198,7 @@ public class SprintController : ControllerBase
 
             if (openSprintCount == 0)
             {
-                var project = await _db.Projects.FindAsync(projectId);
+                var project = await _db.Projects.Include(p => p.Members).FirstOrDefaultAsync(p => p.Id == projectId);
                 if (project is not null && project.Status == "active")
                 {
                     project.Status = "completed";
@@ -184,6 +209,13 @@ public class SprintController : ControllerBase
                         Reason = "Tous les sprints sont clôturés"
                     });
                     await _db.SaveChangesAsync();
+
+                    await _notifications.BroadcastToProjectAsync(
+                        project.Members.Select(m => m.UserId), CurrentUserId,
+                        "Projet terminé",
+                        $"Le projet \"{project.Name}\" est maintenant marqué comme terminé : tous les sprints sont clôturés.",
+                        "project_completed",
+                        projectId: project.Id);
                 }
             }
         }
@@ -288,6 +320,15 @@ public class SprintController : ControllerBase
         await _events.AppendAsync(sprint.ProjectId, "Sprint", "SprintClosed",
             new { sprint.Id, sprint.Name, sprint.Velocity });
         await _db.SaveChangesAsync();
+
+        var memberIds = sprint.Project.Members.Select(m => m.UserId).ToList();
+        await _notifications.BroadcastToProjectAsync(
+            memberIds, CurrentUserId,
+            "Sprint clôturé",
+            $"Le sprint \"{sprint.Name}\" du projet {sprint.Project.Name} a été clôturé.",
+            "sprint_closed",
+            projectId: sprint.ProjectId,
+            sprintId:  sprint.Id);
 
         return Ok(new
         {
