@@ -8,5 +8,8 @@ public record ProjectDto(
     string Status,
     DateTime CreatedAt,
     int MemberCount,
-    string CurrentUserRole   // role of the requesting user in this project
+    string CurrentUserRole,  // role of the requesting user in this project
+    int SprintCount,
+    int TaskTotal,
+    int TaskDone
 );

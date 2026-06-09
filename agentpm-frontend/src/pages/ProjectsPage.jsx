@@ -81,6 +81,7 @@ export default function ProjectsPage() {
   const [page,        setPage]        = useState(1);
   const [search,      setSearch]      = useState('');
   const [status,      setStatus]      = useState('');
+  const [sortBy,      setSortBy]      = useState('date'); // 'date' | 'name' | 'members' | 'progress'
   const [searchInput, setSearchInput] = useState('');
   const [refreshKey,  setRefreshKey]  = useState(0);
   const [showModal,    setShowModal]    = useState(false);
@@ -159,6 +160,17 @@ export default function ProjectsPage() {
     } catch { setError(t('projects.errors.delete')); }
     finally { setDeletingId(null); }
   };
+
+  const sortedProjects = [...projects].sort((a, b) => {
+    if (sortBy === 'name')     return a.name.localeCompare(b.name);
+    if (sortBy === 'members')  return (b.memberCount ?? 0) - (a.memberCount ?? 0);
+    if (sortBy === 'progress') {
+      const pa = a.taskTotal > 0 ? a.taskDone / a.taskTotal : 0;
+      const pb = b.taskTotal > 0 ? b.taskDone / b.taskTotal : 0;
+      return pb - pa;
+    }
+    return new Date(b.createdAt) - new Date(a.createdAt); // default: date desc
+  });
 
   const statusFilters = [
     { v: '',          l: t('projects.all')       },
@@ -248,6 +260,19 @@ export default function ProjectsPage() {
             </div>
           </div>
 
+          {/* Sort dropdown */}
+          <select
+            value={sortBy}
+            onChange={e => setSortBy(e.target.value)}
+            className="px-3 py-2.5 rounded-xl text-xs border outline-none transition-all shrink-0"
+            style={{ background: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--text-2)' }}
+          >
+            <option value="date">↓ Date</option>
+            <option value="name">A → Z</option>
+            <option value="members">Membres</option>
+            <option value="progress">Progression</option>
+          </select>
+
           {/* Status pills */}
           <div className="flex gap-1.5 flex-wrap">
             {statusFilters.map(s => (
@@ -283,7 +308,7 @@ export default function ProjectsPage() {
           <EmptyState search={search} onCreate={() => setShowModal(true)} t={t} />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {projects.map(project => (
+            {sortedProjects.map(project => (
               <ProjectCard
                 key={project.id}
                 project={project}
@@ -488,13 +513,45 @@ function ProjectCard({ project, onClick, onDelete, isDeleting, t }) {
           {project.description || t('common.noDescription')}
         </p>
 
+        {/* Progress bar */}
+        {project.taskTotal > 0 && (
+          <div className="mt-3">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] font-medium" style={{ color: 'var(--text-3)' }}>
+                Progression
+              </span>
+              <span className="text-[10px] font-semibold tabular-nums" style={{ color: 'var(--accent)' }}>
+                {Math.round((project.taskDone / project.taskTotal) * 100)}%
+              </span>
+            </div>
+            <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--surface-2)' }}>
+              <div className="h-full rounded-full transition-all duration-500"
+                style={{
+                  width: `${Math.round((project.taskDone / project.taskTotal) * 100)}%`,
+                  background: project.taskDone === project.taskTotal ? 'var(--success)' : 'var(--accent)',
+                }} />
+            </div>
+            <p className="text-[10px] mt-1" style={{ color: 'var(--text-3)' }}>
+              {project.taskDone}/{project.taskTotal} tâches terminées
+            </p>
+          </div>
+        )}
+
         {/* Footer */}
         <div className="flex items-center justify-between mt-4 pt-3.5 text-xs"
           style={{ borderTop: '1px solid var(--border)', color: 'var(--text-3)' }}>
-          <span className="flex items-center gap-1.5">
-            <IconUsers />
-            {mc !== 1 ? t('projects.membersCount_plural', { count: mc }) : t('projects.membersCount', { count: mc })}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1.5">
+              <IconUsers />
+              {mc !== 1 ? t('projects.membersCount_plural', { count: mc }) : t('projects.membersCount', { count: mc })}
+            </span>
+            {project.sprintCount > 0 && (
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                style={{ background: 'var(--accent-light)', color: 'var(--accent)' }}>
+                {project.sprintCount} sprint{project.sprintCount > 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
           {date && (
             <span className="flex items-center gap-1">
               <IconCalendar /> {date}

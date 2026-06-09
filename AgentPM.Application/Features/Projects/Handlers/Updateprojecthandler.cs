@@ -32,8 +32,11 @@ public class UpdateProjectHandler : IRequestHandler<UpdateProjectCommand, Projec
             aggregate.Project.OwnerId,
             aggregate.Project.Status,
             aggregate.Project.CreatedAt,
-            aggregate.Project.Members.Count,
-            role
+            MemberCount: aggregate.Project.Members.Count,
+            CurrentUserRole: role,
+            SprintCount: aggregate.Project.Sprints.Count,
+            TaskTotal: aggregate.Project.Tasks.Count,
+            TaskDone: aggregate.Project.Tasks.Count(t => t.Status == "done")
         );
     }
 }

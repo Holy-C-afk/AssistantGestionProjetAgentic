@@ -42,6 +42,8 @@ public class ProjectRepository : IProjectRepository
     {
         var query = _db.Projects
             .Include(p => p.Members)
+            .Include(p => p.Sprints)
+            .Include(p => p.Tasks)
             .Where(p =>
                 (p.OwnerId == userId || p.Members.Any(m => m.UserId == userId))
                 && p.Status != "deleted");
