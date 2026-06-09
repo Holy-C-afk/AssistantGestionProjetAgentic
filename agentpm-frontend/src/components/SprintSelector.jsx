@@ -1,25 +1,20 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { getSprints, createSprint, closeSprint, deleteSprint, updateSprintDates } from '../api/sprintApi';
 import { useToast } from '../context/ToastContext';
 
-const SPRINT_STATUS = {
-  planned:   { label: 'Planifié',  bg: '#EFF9FB', text: '#0E7490'  },
-  active:    { label: 'Actif',     bg: '#F0FDF4', text: '#15803D'  },
-  closed:    { label: 'Clôturé',   bg: '#F4F2EE', text: '#6B6560'  },
-  completed: { label: 'Terminé',   bg: '#EFF6FF', text: '#1D4ED8'  },
+const SPRINT_STATUS_STYLE = {
+  planned:   { bg: '#EFF9FB', text: '#0E7490' },
+  active:    { bg: '#F0FDF4', text: '#15803D' },
+  closed:    { bg: '#F4F2EE', text: '#6B6560' },
+  completed: { bg: '#EFF6FF', text: '#1D4ED8' },
 };
-
-const IconChevron = ({ down }) => (
-  <svg className={`w-3.5 h-3.5 transition-transform ${down ? 'rotate-180' : ''}`}
-    fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-  </svg>
-);
 
 export default function SprintSelector({
   projectId, selectedSprintId, onSelect, onSprintsChange,
   refreshKey, onAutoRefresh, isAdmin = true,
 }) {
+  const { t } = useTranslation();
   const [sprints,   setSprints]   = useState([]);
   const [showForm,  setShowForm]  = useState(false);
   const [form,      setForm]      = useState({ name: '', goal: '', startDate: '', endDate: '' });
@@ -45,7 +40,7 @@ export default function SprintSelector({
   const handleCreate = async (e) => {
     e.preventDefault(); setFormError('');
     if (form.startDate && form.endDate && form.startDate >= form.endDate) {
-      setFormError('La date de début doit être antérieure à la date de fin.');
+      setFormError(t('sprint.errors.dates'));
       return;
     }
     try {
@@ -58,10 +53,10 @@ export default function SprintSelector({
       setShowForm(false);
       await fetchSprints();
       onSelect(newSprint.id);
-      show({ type: 'success', title: 'Sprint créé', description: form.name });
+      show({ type: 'success', title: t('sprint.toast.created'), description: form.name });
       if (result.projectReactivated) onAutoRefresh?.({ projectReactivated: true });
     } catch (e) {
-      setFormError(e?.response?.data?.message || 'Erreur lors de la création.');
+      setFormError(e?.response?.data?.message || t('sprint.errors.create'));
     }
   };
 
@@ -71,41 +66,41 @@ export default function SprintSelector({
         startDate: editDates.startDate || null,
         endDate:   editDates.endDate   || null,
       });
-      show({ type: 'success', title: 'Dates mises à jour' });
+      show({ type: 'success', title: t('sprint.toast.datesUpdated') });
       setEditingId(null);
       await fetchSprints();
     } catch (e) {
-      show({ type: 'error', title: 'Erreur', description: e?.response?.data?.message || 'Impossible de modifier les dates.' });
+      show({ type: 'error', title: t('common.error'), description: e?.response?.data?.message || t('sprint.errors.dates') });
     }
   };
 
   const handleClose = async (sprintId, e) => {
     e.stopPropagation(); setCloseError(null);
-    if (!confirm('Clôturer ce sprint ?')) return;
+    if (!confirm(t('sprint.confirmClose'))) return;
     try {
       await closeSprint(projectId, sprintId);
       await fetchSprints();
-      show({ type: 'success', title: 'Sprint clôturé' });
+      show({ type: 'success', title: t('sprint.toast.closed') });
     } catch (err) {
       const data  = err?.response?.data;
       const tasks = data?.unfinishedTasks || [];
-      setCloseError({ message: data?.message || 'Impossible de clôturer.', tasks });
-      show({ type: 'error', title: 'Clôture bloquée', description: `${data?.unfinishedCount ?? ''} tâche(s) non terminée(s)` });
+      setCloseError({ message: data?.message || t('sprint.errors.close'), tasks });
+      show({ type: 'error', title: t('sprint.toast.closedBlocked'), description: `${data?.unfinishedCount ?? ''} ${t('sprint.toast.unfinished')}` });
     }
   };
 
   const handleDelete = async (sprintId, e) => {
     e.stopPropagation(); setDeleteError('');
-    if (!confirm('Supprimer ce sprint ?')) return;
+    if (!confirm(t('sprint.confirmDelete'))) return;
     try {
       const result = await deleteSprint(projectId, sprintId);
       if (selectedSprintId === sprintId) onSelect(null);
       await fetchSprints();
       if (result?.projectAutoCompleted) onAutoRefresh?.({ projectAutoCompleted: true });
     } catch (e) {
-      const msg = e?.response?.data?.message || 'Impossible de supprimer.';
+      const msg = e?.response?.data?.message || t('sprint.errors.delete');
       setDeleteError(msg);
-      show({ type: 'error', title: 'Suppression bloquée', description: msg });
+      show({ type: 'error', title: t('common.error'), description: msg });
     }
   };
 
@@ -115,7 +110,7 @@ export default function SprintSelector({
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3.5"
         style={{ borderBottom: '1px solid var(--border)' }}>
-        <h3 className="font-semibold text-sm" style={{ color: 'var(--text-1)' }}>Sprints</h3>
+        <h3 className="font-semibold text-sm" style={{ color: 'var(--text-1)' }}>{t('sprint.sprints')}</h3>
         {isAdmin && (
           <button
             onClick={() => setShowForm(!showForm)}
@@ -124,7 +119,7 @@ export default function SprintSelector({
               color: showForm ? 'var(--danger)' : 'var(--accent)',
               background: showForm ? 'var(--danger-bg)' : 'var(--accent-light)',
             }}>
-            {showForm ? 'Annuler' : '+ Sprint'}
+            {showForm ? t('sprint.cancelForm') : t('sprint.newSprint')}
           </button>
         )}
       </div>
@@ -146,21 +141,21 @@ export default function SprintSelector({
             <span className="shrink-0 mt-0.5">⚠</span>
             <div className="flex-1">
               <p className="font-semibold">{closeError.message}</p>
-              <p className="mt-0.5 opacity-75">Notifications envoyées aux membres concernés.</p>
+              <p className="mt-0.5 opacity-75">{t('sprint.notificationsSent')}</p>
             </div>
             <button onClick={() => setCloseError(null)} className="shrink-0 hover:opacity-70">✕</button>
           </div>
           {closeError.tasks.length > 0 && (
             <div className="px-3 pb-3 space-y-1" style={{ borderTop: '1px solid #FDE68A' }}>
-              <p className="pt-2 font-medium opacity-75">Tâches non terminées :</p>
-              {closeError.tasks.map((t, i) => (
+              <p className="pt-2 font-medium opacity-75">{t('sprint.unfinishedTasks')}</p>
+              {closeError.tasks.map((task, i) => (
                 <div key={i} className="flex items-center gap-2">
                   <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                    t.status === 'in_progress' ? 'bg-blue-400' :
-                    t.status === 'blocked'     ? 'bg-red-400'  : 'bg-gray-400'
+                    task.status === 'in_progress' ? 'bg-blue-400' :
+                    task.status === 'blocked'     ? 'bg-red-400'  : 'bg-gray-400'
                   }`} />
-                  <span className="flex-1 truncate">{t.title}</span>
-                  {t.assigneeName && <span className="opacity-60 shrink-0">{t.assigneeName}</span>}
+                  <span className="flex-1 truncate">{task.title}</span>
+                  {task.assigneeName && <span className="opacity-60 shrink-0">{task.assigneeName}</span>}
                 </div>
               ))}
             </div>
@@ -173,24 +168,24 @@ export default function SprintSelector({
         <form onSubmit={handleCreate} className="m-4 p-4 rounded-xl space-y-3"
           style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
           <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-2)' }}>
-            Nouveau sprint
+            {t('sprint.newSprintTitle')}
           </p>
 
-          <FormInput label="Nom" required
+          <FormInput label={t('sprint.name')} required
             placeholder="Sprint 1"
             value={form.name}
             onChange={e => setForm({ ...form, name: e.target.value })} />
 
-          <FormInput label="Objectif"
-            placeholder="Objectif du sprint"
+          <FormInput label={t('sprint.goal')}
+            placeholder={t('sprint.goal')}
             value={form.goal}
             onChange={e => setForm({ ...form, goal: e.target.value })} />
 
           <div className="grid grid-cols-2 gap-2">
-            <FormInput label="Début" type="date"
+            <FormInput label={t('sprint.startDate')} type="date"
               value={form.startDate}
               onChange={e => setForm({ ...form, startDate: e.target.value })} />
-            <FormInput label="Fin" type="date"
+            <FormInput label={t('sprint.endDate')} type="date"
               value={form.endDate}
               onChange={e => setForm({ ...form, endDate: e.target.value })} />
           </div>
@@ -205,7 +200,7 @@ export default function SprintSelector({
           <button type="submit"
             className="w-full py-2 rounded-xl text-sm font-semibold text-white transition-colors"
             style={{ background: 'var(--accent)' }}>
-            Créer
+            {t('sprint.create')}
           </button>
         </form>
       )}
@@ -214,11 +209,12 @@ export default function SprintSelector({
       <div className="p-3 space-y-1">
         {sprints.length === 0 ? (
           <p className="text-xs italic text-center py-5" style={{ color: 'var(--text-3)' }}>
-            Aucun sprint
+            {t('sprint.noSprints')}
           </p>
         ) : (
           sprints.map(s => {
-            const statusCfg = SPRINT_STATUS[s.status] ?? { label: s.status, bg: 'var(--surface-2)', text: 'var(--text-2)' };
+            const statusStyle = SPRINT_STATUS_STYLE[s.status] ?? { bg: 'var(--surface-2)', text: 'var(--text-2)' };
+            const statusLabel = t(`sprint.status.${s.status}`, { defaultValue: s.status });
             const isSelected = selectedSprintId === s.id;
 
             return (
@@ -241,8 +237,8 @@ export default function SprintSelector({
                           {s.name}
                         </h4>
                         <span className="text-xs px-2 py-0.5 rounded-full font-medium shrink-0"
-                          style={{ background: statusCfg.bg, color: statusCfg.text }}>
-                          {statusCfg.label}
+                          style={{ background: statusStyle.bg, color: statusStyle.text }}>
+                          {statusLabel}
                         </span>
                       </div>
 
@@ -253,8 +249,8 @@ export default function SprintSelector({
                       )}
 
                       <p className="text-xs" style={{ color: 'var(--text-3)' }}>
-                        {s.taskCount} tâche{s.taskCount !== 1 ? 's' : ''}
-                        {s.velocity > 0 && ` · ${s.velocity} pts`}
+                        {s.taskCount} {s.taskCount !== 1 ? t('sprint.tasks_plural') : t('sprint.tasks')}
+                        {s.velocity > 0 && ` · ${s.velocity} ${t('sprint.pts')}`}
                         {(s.startDate || s.endDate) && (
                           <span className="ml-1">
                             · {s.startDate ?? '?'} → {s.endDate ?? '?'}
@@ -274,19 +270,19 @@ export default function SprintSelector({
                           }}
                           className="text-xs transition-colors px-1.5 py-0.5 rounded"
                           style={{ color: 'var(--accent)', background: 'var(--accent-light)' }}>
-                          Dates
+                          {t('sprint.dates')}
                         </button>
                         {s.status !== 'closed' && (
                           <button onClick={e => handleClose(s.id, e)}
                             className="text-xs px-1.5 py-0.5 rounded transition-colors"
                             style={{ color: 'var(--warning)', background: 'var(--warning-bg)' }}>
-                            Clôturer
+                            {t('sprint.close')}
                           </button>
                         )}
                         <button onClick={e => handleDelete(s.id, e)}
                           className="text-xs px-1.5 py-0.5 rounded transition-colors"
                           style={{ color: 'var(--danger)', background: 'var(--danger-bg)' }}>
-                          Supprimer
+                          {t('sprint.delete')}
                         </button>
                       </div>
                     )}
@@ -299,13 +295,13 @@ export default function SprintSelector({
                     className="mt-1 mb-1 mx-1 p-3 rounded-xl space-y-2 border"
                     style={{ background: 'var(--accent-light)', borderColor: 'var(--accent)' }}>
                     <p className="text-xs font-semibold" style={{ color: 'var(--accent-text)' }}>
-                      Modifier les dates
+                      {t('sprint.editDates')}
                     </p>
                     <div className="grid grid-cols-2 gap-2">
-                      <FormInput label="Début" type="date"
+                      <FormInput label={t('sprint.startDate')} type="date"
                         value={editDates.startDate}
                         onChange={e => setEditDates(d => ({ ...d, startDate: e.target.value }))} />
-                      <FormInput label="Fin" type="date"
+                      <FormInput label={t('sprint.endDate')} type="date"
                         value={editDates.endDate}
                         onChange={e => setEditDates(d => ({ ...d, endDate: e.target.value }))} />
                     </div>
@@ -313,12 +309,12 @@ export default function SprintSelector({
                       <button onClick={() => handleSaveDates(s.id)}
                         className="flex-1 py-1.5 rounded-lg text-xs font-semibold text-white transition-colors"
                         style={{ background: 'var(--accent)' }}>
-                        Enregistrer
+                        {t('sprint.save')}
                       </button>
                       <button onClick={() => setEditingId(null)}
                         className="flex-1 py-1.5 rounded-lg text-xs border transition-colors"
                         style={{ color: 'var(--text-2)', borderColor: 'var(--border)', background: 'var(--surface)' }}>
-                        Annuler
+                        {t('common.cancel')}
                       </button>
                     </div>
                   </div>

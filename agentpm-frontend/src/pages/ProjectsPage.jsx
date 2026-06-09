@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { getMyProjects, createProject, deleteProject } from '../api/projectApi';
 
 const PAGE_SIZE = 9;
@@ -10,12 +11,6 @@ const ACCENTS = [
   '#1D4ED8','#15803D','#9333EA','#C2410C','#0369A1',
 ];
 const projectAccent = (name = '') => ACCENTS[name.charCodeAt(0) % ACCENTS.length];
-
-const STATUS_CFG = {
-  active:    { label: 'Actif',    bg: '#F0FDF4', text: '#15803D', dot: '#16A34A' },
-  archived:  { label: 'Archivé', bg: '#FFFBEB', text: '#B45309', dot: '#D97706' },
-  completed: { label: 'Terminé', bg: '#EFF9FB', text: '#0E7490', dot: '#0E9F9F' },
-};
 
 function getPageNumbers(current, total) {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
@@ -77,6 +72,7 @@ const IconX = () => (
 /* ── Main page ──────────────────────────────────────────────────── */
 export default function ProjectsPage() {
   const navigate  = useNavigate();
+  const { t }     = useTranslation();
   const userName  = sessionStorage.getItem('userName') || '';
   const firstName = userName.split(' ')[0];
 
@@ -112,10 +108,10 @@ export default function ProjectsPage() {
         setTotal(typeof data?.total === 'number' ? data.total : 0);
       }
     } catch (err) {
-      setError('Impossible de charger les projets. Vérifiez que le backend est démarré.');
+      setError(t('projects.errors.load'));
       setProjects([]); setTotal(0);
     } finally { setFetching(false); }
-  }, [page, status, search]);
+  }, [page, status, search, t]);
 
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
 
@@ -127,7 +123,7 @@ export default function ProjectsPage() {
       await createProject(form);
       setShowModal(false); setForm({ name: '', description: '' }); setPage(1);
       await fetchProjects();
-    } catch { setError('Erreur lors de la création du projet.'); }
+    } catch { setError(t('projects.errors.create')); }
     finally { setLoading(false); }
   };
 
@@ -137,9 +133,16 @@ export default function ProjectsPage() {
     try {
       await deleteProject(confirmId);
       await fetchProjects();
-    } catch { setError('Erreur lors de la suppression du projet.'); }
+    } catch { setError(t('projects.errors.delete')); }
     finally { setDeletingId(null); }
   };
+
+  const statusFilters = [
+    { v: '',          l: t('projects.all')       },
+    { v: 'active',    l: t('projects.active')    },
+    { v: 'completed', l: t('projects.completed') },
+    { v: 'archived',  l: t('projects.archived')  },
+  ];
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
@@ -150,17 +153,17 @@ export default function ProjectsPage() {
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6">
             <div>
               <p className="text-sm font-medium mb-1.5" style={{ color: 'var(--accent)' }}>
-                {firstName ? `Bonjour, ${firstName}` : 'Bienvenue'}
+                {firstName ? t('projects.greeting', { name: firstName }) : t('projects.welcome')}
               </p>
               <h1 className="text-3xl font-bold tracking-tight" style={{ color: 'var(--text-1)' }}>
-                Mes projets
+                {t('projects.title')}
               </h1>
               <div className="flex items-center gap-5 mt-3">
-                <Stat n={total}          label="Total"    />
+                <Stat n={total}          label={t('projects.total')}     />
                 <div className="w-px h-5" style={{ background: 'var(--border)' }} />
-                <Stat n={activeCount}    label="Actifs"   color="var(--success)"  />
+                <Stat n={activeCount}    label={t('projects.active')}    color="var(--success)"  />
                 <div className="w-px h-5" style={{ background: 'var(--border)' }} />
-                <Stat n={completedCount} label="Terminés" color="var(--accent)"   />
+                <Stat n={completedCount} label={t('projects.completed')} color="var(--accent)"   />
               </div>
             </div>
             <button
@@ -170,7 +173,7 @@ export default function ProjectsPage() {
               onMouseEnter={e => e.currentTarget.style.background = 'var(--accent-h)'}
               onMouseLeave={e => e.currentTarget.style.background = 'var(--accent)'}
             >
-              <IconPlus /> Nouveau projet
+              <IconPlus /> {t('projects.new')}
             </button>
           </div>
         </div>
@@ -195,7 +198,7 @@ export default function ProjectsPage() {
               </span>
               <input
                 type="text"
-                placeholder="Rechercher un projet…"
+                placeholder={t('projects.searchPlaceholder')}
                 value={searchInput}
                 onChange={e => setSearchInput(e.target.value)}
                 onKeyDown={e => e.key === 'Escape' && handleClear()}
@@ -212,19 +215,14 @@ export default function ProjectsPage() {
               <button type="submit"
                 className="px-4 py-2.5 rounded-xl text-sm font-medium text-white shrink-0 transition-colors"
                 style={{ background: 'var(--accent)' }}>
-                Chercher
+                {t('projects.search')}
               </button>
             )}
           </form>
 
           {/* Status pills */}
           <div className="flex gap-1.5 flex-wrap">
-            {[
-              { v: '',          l: 'Tous'     },
-              { v: 'active',    l: 'Actifs'   },
-              { v: 'completed', l: 'Terminés' },
-              { v: 'archived',  l: 'Archivés' },
-            ].map(s => (
+            {statusFilters.map(s => (
               <button key={s.v}
                 onClick={() => { setStatus(s.v); setPage(1); }}
                 className="px-3.5 py-2.5 rounded-xl text-xs font-medium border transition-all"
@@ -239,7 +237,7 @@ export default function ProjectsPage() {
               <button onClick={handleClear}
                 className="flex items-center gap-1 px-3 py-2.5 rounded-xl text-xs border transition-colors"
                 style={{ background: 'var(--surface)', color: 'var(--text-3)', borderColor: 'var(--border)' }}>
-                <IconX /> Effacer
+                <IconX /> {t('projects.clearFilter')}
               </button>
             )}
           </div>
@@ -247,14 +245,14 @@ export default function ProjectsPage() {
 
         {/* Result count */}
         <p className="text-xs mb-5" style={{ color: 'var(--text-3)' }}>
-          {fetching ? '…' : `${total} projet${total !== 1 ? 's' : ''}${search ? ` · « ${search} »` : ''}`}
+          {fetching ? '…' : `${total} ${total !== 1 ? t('projects.resultCount_plural', { count: total }) : t('projects.resultCount', { count: total })}${search ? t('projects.resultSearch', { term: search }) : ''}`}
         </p>
 
         {/* Grid */}
         {fetching ? (
           <SkeletonGrid />
         ) : projects.length === 0 ? (
-          <EmptyState search={search} onCreate={() => setShowModal(true)} />
+          <EmptyState search={search} onCreate={() => setShowModal(true)} t={t} />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {projects.map(project => (
@@ -264,6 +262,7 @@ export default function ProjectsPage() {
                 onClick={() => navigate(`/projects/${project.id}`)}
                 onDelete={e => { e.stopPropagation(); setConfirmId(project.id); }}
                 isDeleting={deletingId === project.id}
+                t={t}
               />
             ))}
           </div>
@@ -289,15 +288,15 @@ export default function ProjectsPage() {
       {showModal && (
         <Modal onClose={() => setShowModal(false)}>
           <ModalHeader
-            title="Nouveau projet"
-            subtitle="Renseignez les informations ci-dessous"
+            title={t('projects.createModal.title')}
+            subtitle={t('projects.createModal.subtitle')}
             onClose={() => setShowModal(false)}
           />
           <form onSubmit={handleCreate} className="p-6 space-y-4">
-            <Field label="Nom du projet" required>
+            <Field label={t('common.name')} required>
               <input
                 type="text" required autoFocus
-                placeholder="Ex : Refonte site web"
+                placeholder={t('projects.createModal.namePlaceholder')}
                 value={form.name}
                 onChange={e => setForm({ ...form, name: e.target.value })}
                 className="w-full px-4 py-3 text-sm rounded-xl border outline-none transition-all"
@@ -306,9 +305,9 @@ export default function ProjectsPage() {
                 onBlur={e => e.target.style.borderColor = 'var(--border)'}
               />
             </Field>
-            <Field label="Description" hint="optionnel">
+            <Field label={t('common.description')} hint={t('common.optional')}>
               <textarea
-                placeholder="Décrivez brièvement le projet…"
+                placeholder={t('projects.createModal.descPlaceholder')}
                 value={form.description}
                 onChange={e => setForm({ ...form, description: e.target.value })}
                 className="w-full px-4 py-3 text-sm rounded-xl border outline-none resize-none transition-all"
@@ -334,15 +333,15 @@ export default function ProjectsPage() {
                 {loading ? (
                   <span className="flex items-center justify-center gap-2">
                     <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Création…
+                    {t('projects.createModal.creating')}
                   </span>
-                ) : 'Créer le projet'}
+                ) : t('projects.createModal.submit')}
               </button>
               <button type="button"
                 onClick={() => setShowModal(false)}
                 className="px-5 py-3 rounded-xl text-sm border transition-colors"
                 style={{ color: 'var(--text-2)', borderColor: 'var(--border)', background: 'transparent' }}>
-                Annuler
+                {t('common.cancel')}
               </button>
             </div>
           </form>
@@ -353,28 +352,27 @@ export default function ProjectsPage() {
       {confirmId && (
         <Modal onClose={() => setConfirmId(null)}>
           <ModalHeader
-            title="Supprimer le projet ?"
-            subtitle="Cette action est irréversible"
+            title={t('projects.deleteModal.title')}
+            subtitle={t('projects.deleteModal.subtitle')}
             onClose={() => setConfirmId(null)}
             danger
           />
           <div className="p-6">
             <p className="text-sm mb-6" style={{ color: 'var(--text-2)' }}>
-              Tous les sprints, tâches et commentaires associés seront{' '}
-              <strong style={{ color: 'var(--text-1)' }}>définitivement supprimés</strong>.
+              {t('projects.deleteModal.body')}
             </p>
             <div className="flex gap-3">
               <button
                 onClick={handleDeleteConfirmed}
                 className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors"
                 style={{ background: 'var(--danger)' }}>
-                Supprimer
+                {t('projects.deleteModal.confirm')}
               </button>
               <button
                 onClick={() => setConfirmId(null)}
                 className="flex-1 py-2.5 rounded-xl text-sm border transition-colors"
                 style={{ color: 'var(--text-2)', borderColor: 'var(--border)' }}>
-                Annuler
+                {t('common.cancel')}
               </button>
             </div>
           </div>
@@ -385,14 +383,22 @@ export default function ProjectsPage() {
 }
 
 /* ── Project card ───────────────────────────────────────────────── */
-function ProjectCard({ project, onClick, onDelete, isDeleting }) {
+function ProjectCard({ project, onClick, onDelete, isDeleting, t }) {
   const accent  = projectAccent(project.name);
-  const status  = STATUS_CFG[project.status] ?? { label: project.status, bg: 'var(--surface-2)', text: 'var(--text-2)', dot: 'var(--text-3)' };
+  const statusKey = project.status || 'active';
+  const STATUS_STYLE = {
+    active:    { bg: '#F0FDF4', text: '#15803D', dot: '#16A34A' },
+    archived:  { bg: '#FFFBEB', text: '#B45309', dot: '#D97706' },
+    completed: { bg: '#EFF9FB', text: '#0E7490', dot: '#0E9F9F' },
+  };
+  const statusStyle = STATUS_STYLE[statusKey] ?? { bg: 'var(--surface-2)', text: 'var(--text-2)', dot: 'var(--text-3)' };
+  const statusLabel = t(`projects.status.${statusKey}`, { defaultValue: statusKey });
   const initials = project.name.slice(0, 2).toUpperCase();
-  const date    = project.createdAt
-    ? new Date(project.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
+  const date = project.createdAt
+    ? new Date(project.createdAt).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })
     : null;
   const isAdmin = project.currentUserRole === 'admin' || project.currentUserRole === 'owner';
+  const mc = project.memberCount ?? 0;
 
   return (
     <div
@@ -413,7 +419,7 @@ function ProjectCard({ project, onClick, onDelete, isDeleting }) {
       {/* Card body */}
       <div className="pl-5 pr-4 pt-5 pb-4">
 
-        {/* Top row: initials + status badge + delete */}
+        {/* Top row */}
         <div className="flex items-start justify-between mb-4">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold text-white select-none shrink-0"
             style={{ background: accent }}>
@@ -421,15 +427,15 @@ function ProjectCard({ project, onClick, onDelete, isDeleting }) {
           </div>
           <div className="flex items-center gap-2">
             <span className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full"
-              style={{ background: status.bg, color: status.text }}>
-              <span className="w-1.5 h-1.5 rounded-full" style={{ background: status.dot }} />
-              {status.label}
+              style={{ background: statusStyle.bg, color: statusStyle.text }}>
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: statusStyle.dot }} />
+              {statusLabel}
             </span>
             {isAdmin && (
               <button
                 onClick={onDelete}
                 disabled={isDeleting}
-                title="Supprimer"
+                title={t('common.delete')}
                 className="w-7 h-7 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
                 style={{ color: 'var(--text-3)', background: 'transparent' }}
                 onMouseEnter={e => { e.currentTarget.style.color = 'var(--danger)'; e.currentTarget.style.background = 'var(--danger-bg)'; }}
@@ -451,7 +457,7 @@ function ProjectCard({ project, onClick, onDelete, isDeleting }) {
 
         {/* Description */}
         <p className="text-sm line-clamp-2 leading-relaxed" style={{ color: 'var(--text-3)', minHeight: '2.5rem' }}>
-          {project.description || 'Aucune description'}
+          {project.description || t('common.noDescription')}
         </p>
 
         {/* Footer */}
@@ -459,7 +465,7 @@ function ProjectCard({ project, onClick, onDelete, isDeleting }) {
           style={{ borderTop: '1px solid var(--border)', color: 'var(--text-3)' }}>
           <span className="flex items-center gap-1.5">
             <IconUsers />
-            {project.memberCount ?? 0} membre{(project.memberCount ?? 0) !== 1 ? 's' : ''}
+            {mc !== 1 ? t('projects.membersCount_plural', { count: mc }) : t('projects.membersCount', { count: mc })}
           </span>
           {date && (
             <span className="flex items-center gap-1">
@@ -501,7 +507,7 @@ function SkeletonGrid() {
 }
 
 /* ── Empty state ────────────────────────────────────────────────── */
-function EmptyState({ search, onCreate }) {
+function EmptyState({ search, onCreate, t }) {
   return (
     <div className="text-center py-24 px-6">
       <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5"
@@ -509,17 +515,17 @@ function EmptyState({ search, onCreate }) {
         <IconFolder />
       </div>
       <h3 className="text-base font-semibold mb-2" style={{ color: 'var(--text-1)' }}>
-        {search ? `Aucun résultat pour « ${search} »` : "Aucun projet pour l'instant"}
+        {search ? t('projects.noResults', { term: search }) : t('projects.noProjects')}
       </h3>
       <p className="text-sm mb-7" style={{ color: 'var(--text-3)' }}>
-        {search ? 'Essayez un autre terme.' : 'Créez votre premier projet pour commencer.'}
+        {search ? t('projects.tryOther') : t('projects.createFirst')}
       </p>
       {!search && (
         <button
           onClick={onCreate}
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors"
           style={{ background: 'var(--accent)' }}>
-          <IconPlus size={3.5} /> Créer un projet
+          <IconPlus size={3.5} /> {t('projects.createProject')}
         </button>
       )}
     </div>

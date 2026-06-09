@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   getProjectById, getProjectMembers, addMemberByEmail, removeMember,
   updateProject, updateProjectStatus, downloadProjectPdf, getUsers,
@@ -8,21 +9,6 @@ import SprintSelector from '../components/SprintSelector';
 import KanbanBoard from '../components/KanbanBoard';
 import TaskDetailModal from '../components/TaskDetailModal';
 import AgentPanel from '../components/AgentPanel';
-
-/* ── Status config ─────────────────────────────────────────────── */
-const STATUS_CFG = {
-  active:    { label: 'Actif',    bg: '#F0FDF4', text: '#15803D', dot: '#16A34A' },
-  archived:  { label: 'Archivé', bg: '#FFFBEB', text: '#B45309', dot: '#D97706' },
-  completed: { label: 'Terminé', bg: '#EFF9FB', text: '#0E7490', dot: '#0E9488' },
-};
-
-/* ── Role config ───────────────────────────────────────────────── */
-const ROLE_CFG = {
-  admin:  { label: 'Chef de projet', bg: '#F3E8FF', text: '#7C3AED' },
-  owner:  { label: 'Chef de projet', bg: '#F3E8FF', text: '#7C3AED' },
-  member: { label: 'Collaborateur',  bg: '#EFF9FB', text: '#0E7490' },
-  viewer: { label: 'Observateur',    bg: '#F4F2EE', text: '#6B6560' },
-};
 
 /* ── SVG icons ─────────────────────────────────────────────────── */
 const IconArrow = () => (
@@ -55,8 +41,9 @@ const IconX = () => (
 
 /* ─────────────────────────────────────────────────────────────── */
 export default function ProjectDetailPage() {
-  const { id }   = useParams();
-  const navigate = useNavigate();
+  const { id }    = useParams();
+  const navigate  = useNavigate();
+  const { t }     = useTranslation();
 
   const [project,  setProject]  = useState(null);
   const [members,  setMembers]  = useState([]);
@@ -66,7 +53,6 @@ export default function ProjectDetailPage() {
   const [boardRefreshKey,  setBoardRefreshKey]  = useState(0);
   const [sprintRefreshKey, setSprintRefreshKey] = useState(0);
 
-  // Member picker
   const [newRole,       setNewRole]       = useState('member');
   const [addingMember,  setAddingMember]  = useState(false);
   const [userSearch,    setUserSearch]    = useState('');
@@ -104,7 +90,7 @@ export default function ProjectDetailPage() {
       const updated = await getProjectMembers(id);
       setMembers(updated); setSelectedUser(null); setUserSearch(''); setNewRole('member');
     } catch (err) {
-      setError(err?.response?.data?.message || "Erreur lors de l'ajout du membre.");
+      setError(err?.response?.data?.message || t('project.errors.status'));
     } finally { setAddingMember(false); }
   };
 
@@ -126,16 +112,17 @@ export default function ProjectDetailPage() {
   const handleExportPdf = async () => {
     setPdfLoading(true);
     try { await downloadProjectPdf(id, project.name); }
-    catch { setError('Erreur lors de la génération du PDF.'); }
+    catch { setError(t('project.errors.pdf')); }
     finally { setPdfLoading(false); }
   };
 
   const handleStatusChange = async (newStatus) => {
-    if (!confirm(`Confirmer : passer le projet en « ${newStatus} » ?`)) return;
+    const label = t(`project.status.${newStatus}`, { defaultValue: newStatus });
+    if (!confirm(t('project.confirmStatus', { status: label }))) return;
     try {
       const updated = await updateProjectStatus(id, newStatus);
       setProject(p => ({ ...p, status: updated.status }));
-    } catch { setError('Erreur lors du changement de statut.'); }
+    } catch { setError(t('project.errors.status')); }
   };
 
   const refreshBoard = () => setBoardRefreshKey(k => k + 1);
@@ -153,12 +140,25 @@ export default function ProjectDetailPage() {
       <div className="flex flex-col items-center gap-3">
         <span className="w-8 h-8 border-4 border-t-transparent rounded-full animate-spin"
           style={{ borderColor: 'var(--border)', borderTopColor: 'var(--accent)' }} />
-        <p className="text-sm" style={{ color: 'var(--text-3)' }}>Chargement…</p>
+        <p className="text-sm" style={{ color: 'var(--text-3)' }}>{t('common.loading')}</p>
       </div>
     </div>
   );
 
-  const statusCfg = STATUS_CFG[project.status] ?? { label: project.status, bg: 'var(--surface-2)', text: 'var(--text-2)', dot: 'var(--text-3)' };
+  const STATUS_STYLE = {
+    active:    { bg: '#F0FDF4', text: '#15803D', dot: '#16A34A' },
+    archived:  { bg: '#FFFBEB', text: '#B45309', dot: '#D97706' },
+    completed: { bg: '#EFF9FB', text: '#0E7490', dot: '#0E9488' },
+  };
+  const statusCfg   = STATUS_STYLE[project.status] ?? { bg: 'var(--surface-2)', text: 'var(--text-2)', dot: 'var(--text-3)' };
+  const statusLabel = t(`project.status.${project.status}`, { defaultValue: project.status });
+
+  const ROLE_STYLE = {
+    admin:  { bg: '#F3E8FF', text: '#7C3AED' },
+    owner:  { bg: '#F3E8FF', text: '#7C3AED' },
+    member: { bg: '#EFF9FB', text: '#0E7490' },
+    viewer: { bg: '#F4F2EE', text: '#6B6560' },
+  };
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
@@ -174,7 +174,7 @@ export default function ProjectDetailPage() {
             onMouseEnter={e => e.currentTarget.style.color = 'var(--accent)'}
             onMouseLeave={e => e.currentTarget.style.color = 'var(--text-3)'}>
             <IconArrow />
-            <span>Projets</span>
+            <span>{t('project.backToProjects')}</span>
           </button>
 
           {error && (
@@ -197,13 +197,13 @@ export default function ProjectDetailPage() {
                 className="w-full px-4 py-2.5 text-sm rounded-xl border outline-none resize-none transition-all"
                 style={{ borderColor: 'var(--border)', background: 'var(--surface-2)', color: 'var(--text-1)' }}
                 value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
-                rows={2} placeholder="Description (optionnel)"
+                rows={2} placeholder={`${t('common.description')} (${t('common.optional')})`}
                 onFocus={e => e.target.style.borderColor = 'var(--accent)'}
                 onBlur={e => e.target.style.borderColor = 'var(--border)'}
               />
               <div className="flex gap-2">
-                <ActionBtn primary onClick={e => { e.preventDefault(); handleUpdate(e); }}>Sauvegarder</ActionBtn>
-                <ActionBtn onClick={() => setEditing(false)}>Annuler</ActionBtn>
+                <ActionBtn primary onClick={e => { e.preventDefault(); handleUpdate(e); }}>{t('common.save')}</ActionBtn>
+                <ActionBtn onClick={() => setEditing(false)}>{t('common.cancel')}</ActionBtn>
               </div>
             </form>
           ) : (
@@ -216,31 +216,32 @@ export default function ProjectDetailPage() {
                   <span className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full"
                     style={{ background: statusCfg.bg, color: statusCfg.text }}>
                     <span className="w-1.5 h-1.5 rounded-full" style={{ background: statusCfg.dot }} />
-                    {statusCfg.label}
+                    {statusLabel}
                   </span>
                 </div>
                 <p className="text-sm mb-2" style={{ color: project.description ? 'var(--text-2)' : 'var(--text-3)' }}>
-                  {project.description || <em>Pas de description</em>}
+                  {project.description || <em>{t('project.noDescription')}</em>}
                 </p>
                 <p className="text-xs" style={{ color: 'var(--text-3)' }}>
-                  Créé le {new Date(project.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}
-                  {' · '} <span style={{ color: 'var(--text-2)' }}>{members.length}</span> membre{members.length !== 1 ? 's' : ''}
+                  {t('project.createdOn')} {new Date(project.createdAt).toLocaleDateString(undefined, { day: '2-digit', month: 'long', year: 'numeric' })}
+                  {' · '} <span style={{ color: 'var(--text-2)' }}>{members.length}</span>{' '}
+                  {members.length !== 1 ? t('common.members') : t('common.member')}
                 </p>
               </div>
 
               {/* Action buttons */}
               <div className="flex items-center gap-2 flex-wrap shrink-0">
                 {isAdmin && (
-                  <ActionBtn icon={<IconEdit />} onClick={() => setEditing(true)}>Modifier</ActionBtn>
+                  <ActionBtn icon={<IconEdit />} onClick={() => setEditing(true)}>{t('project.actions.edit')}</ActionBtn>
                 )}
                 {isAdmin && project.status !== 'archived' && (
-                  <ActionBtn warning onClick={() => handleStatusChange('archived')}>Archiver</ActionBtn>
+                  <ActionBtn warning onClick={() => handleStatusChange('archived')}>{t('project.actions.archive')}</ActionBtn>
                 )}
                 {isAdmin && project.status !== 'completed' && (
-                  <ActionBtn onClick={() => handleStatusChange('completed')}>Terminer</ActionBtn>
+                  <ActionBtn onClick={() => handleStatusChange('completed')}>{t('project.actions.complete')}</ActionBtn>
                 )}
                 {isAdmin && (project.status === 'archived' || project.status === 'completed') && (
-                  <ActionBtn success onClick={() => handleStatusChange('active')}>Réactiver</ActionBtn>
+                  <ActionBtn success onClick={() => handleStatusChange('active')}>{t('project.actions.reactivate')}</ActionBtn>
                 )}
                 <ActionBtn
                   icon={pdfLoading
@@ -248,7 +249,7 @@ export default function ProjectDetailPage() {
                     : <IconPdf />}
                   onClick={handleExportPdf}
                   disabled={pdfLoading}>
-                  PDF
+                  {pdfLoading ? t('project.actions.pdfLoading') : t('project.actions.pdf')}
                 </ActionBtn>
               </div>
             </div>
@@ -259,17 +260,17 @@ export default function ProjectDetailPage() {
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex gap-0">
             {[
-              { k: 'board',   l: 'Sprint Board' },
-              { k: 'members', l: `Membres (${members.length})` },
-            ].map(t => (
-              <button key={t.k}
-                onClick={() => setTab(t.k)}
+              { k: 'board',   l: t('project.tabs.board') },
+              { k: 'members', l: t('project.tabs.members', { count: members.length }) },
+            ].map(tabItem => (
+              <button key={tabItem.k}
+                onClick={() => setTab(tabItem.k)}
                 className="px-5 py-3 text-sm font-medium transition-all relative"
                 style={{
-                  color: tab === t.k ? 'var(--accent)' : 'var(--text-2)',
-                  borderBottom: `2px solid ${tab === t.k ? 'var(--accent)' : 'transparent'}`,
+                  color: tab === tabItem.k ? 'var(--accent)' : 'var(--text-2)',
+                  borderBottom: `2px solid ${tab === tabItem.k ? 'var(--accent)' : 'transparent'}`,
                 }}>
-                {t.l}
+                {tabItem.l}
               </button>
             ))}
           </div>
@@ -311,7 +312,7 @@ export default function ProjectDetailPage() {
             {isAdmin && (
               <div className="rounded-2xl border p-5" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
                 <h3 className="text-sm font-semibold mb-4" style={{ color: 'var(--text-1)' }}>
-                  Ajouter un utilisateur
+                  {t('project.members.add')}
                 </h3>
 
                 {/* Search box */}
@@ -322,7 +323,7 @@ export default function ProjectDetailPage() {
                   </span>
                   <input
                     type="text"
-                    placeholder="Rechercher par nom ou email…"
+                    placeholder={t('project.members.searchPlaceholder')}
                     value={userSearch}
                     onChange={e => { setUserSearch(e.target.value); setSelectedUser(null); }}
                     className="w-full pl-10 pr-3 py-2.5 text-sm rounded-xl border outline-none transition-all"
@@ -346,8 +347,8 @@ export default function ProjectDetailPage() {
                       {filtered.length === 0 ? (
                         <p className="text-xs text-center py-6 italic" style={{ color: 'var(--text-3)' }}>
                           {allUsers.length === 0
-                            ? 'Aucun utilisateur enregistré.'
-                            : 'Aucun résultat correspondant.'}
+                            ? t('project.members.noUsers')
+                            : t('project.members.noResults')}
                         </p>
                       ) : filtered.map(u => {
                         const ini = u.fullName
@@ -392,7 +393,7 @@ export default function ProjectDetailPage() {
                   <div className="p-3 rounded-xl border mb-3"
                     style={{ background: 'var(--accent-light)', borderColor: 'var(--accent)' }}>
                     <p className="text-xs font-medium mb-2" style={{ color: 'var(--accent-text)' }}>
-                      Ajouter <strong>{selectedUser.fullName}</strong> en tant que :
+                      {t('project.members.addAs', { name: selectedUser.fullName })}
                     </p>
                     <div className="flex gap-2">
                       <select
@@ -400,8 +401,8 @@ export default function ProjectDetailPage() {
                         onChange={e => setNewRole(e.target.value)}
                         className="flex-1 px-3 py-2 text-sm rounded-xl border outline-none transition-all"
                         style={{ background: 'var(--surface)', borderColor: 'var(--accent)', color: 'var(--text-1)' }}>
-                        <option value="member">Collaborateur</option>
-                        <option value="admin">Chef de projet</option>
+                        <option value="member">{t('project.members.roleCollaborateur')}</option>
+                        <option value="admin">{t('project.members.roleChef')}</option>
                       </select>
                       <button
                         onClick={handleAddMember}
@@ -410,14 +411,14 @@ export default function ProjectDetailPage() {
                         style={{ background: 'var(--accent)' }}>
                         {addingMember
                           ? <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                          : '+ Ajouter'}
+                          : t('project.members.addBtn')}
                       </button>
                     </div>
                   </div>
                 )}
 
                 <p className="text-xs text-center" style={{ color: 'var(--text-3)' }}>
-                  Seuls les utilisateurs connectés au moins une fois apparaissent.
+                  {t('project.members.onlyRegistered')}
                 </p>
               </div>
             )}
@@ -426,7 +427,7 @@ export default function ProjectDetailPage() {
             <div className="rounded-2xl border p-5" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
               <div className="flex items-center gap-2 mb-4">
                 <h3 className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>
-                  Membres actuels
+                  {t('project.members.current')}
                 </h3>
                 <span className="text-xs px-2 py-0.5 rounded-full font-medium"
                   style={{ background: 'var(--accent-light)', color: 'var(--accent)' }}>
@@ -437,14 +438,15 @@ export default function ProjectDetailPage() {
               <div className="space-y-2 max-h-[450px] overflow-y-auto">
                 {members.length === 0 && (
                   <p className="text-sm text-center py-8 italic" style={{ color: 'var(--text-3)' }}>
-                    Aucun membre pour l'instant.
+                    {t('project.members.noMembers')}
                   </p>
                 )}
                 {members.map(m => {
                   const ini = m.fullName
                     ? m.fullName.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2)
                     : '?';
-                  const roleCfg = ROLE_CFG[m.role] ?? { label: m.role, bg: 'var(--surface-2)', text: 'var(--text-2)' };
+                  const roleSt = ROLE_STYLE[m.role] ?? { bg: 'var(--surface-2)', text: 'var(--text-2)' };
+                  const roleLabel = t(`project.roles.${m.role}`, { defaultValue: m.role });
                   return (
                     <div key={m.userId}
                       className="flex items-center justify-between p-3 rounded-xl transition-colors"
@@ -461,15 +463,15 @@ export default function ProjectDetailPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs px-2 py-0.5 rounded-full font-medium"
-                          style={{ background: roleCfg.bg, color: roleCfg.text }}>
-                          {roleCfg.label}
+                          style={{ background: roleSt.bg, color: roleSt.text }}>
+                          {roleLabel}
                         </span>
                         {isAdmin && (
                           <button
                             onClick={() => handleRemoveMember(m.userId)}
                             className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
                             style={{ color: 'var(--text-3)', background: 'transparent' }}
-                            title="Retirer du projet"
+                            title={t('project.members.remove')}
                             onMouseEnter={e => { e.currentTarget.style.color = 'var(--danger)'; e.currentTarget.style.background = 'var(--danger-bg)'; }}
                             onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-3)'; e.currentTarget.style.background = 'transparent'; }}
                           >

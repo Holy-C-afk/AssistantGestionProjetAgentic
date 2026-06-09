@@ -1,16 +1,19 @@
 import { useDroppable } from '@dnd-kit/core';
+import { useTranslation } from 'react-i18next';
 import TaskCard from './TaskCard';
 
 const COLUMN_META = {
-  todo:        { label: 'À faire',     accent: '#94A3B8', dot: '#94A3B8' },
-  clarifier:   { label: 'À clarifier', accent: '#F59E0B', dot: '#F59E0B' },
-  in_progress: { label: 'En cours',    accent: '#0E7490', dot: '#0E7490' },
-  done:        { label: 'Terminé',     accent: '#15803D', dot: '#15803D' },
-  blocked:     { label: 'Bloqué',      accent: '#DC2626', dot: '#DC2626' },
+  todo:        { accent: '#94A3B8', dot: '#94A3B8' },
+  clarifier:   { accent: '#F59E0B', dot: '#F59E0B' },
+  in_progress: { accent: '#0E7490', dot: '#0E7490' },
+  done:        { accent: '#15803D', dot: '#15803D' },
+  blocked:     { accent: '#DC2626', dot: '#DC2626' },
 };
 
 export default function KanbanColumn({ status, tasks, onTaskClick, onAddTask, onPriorityChanged, isAdmin = true }) {
-  const meta = COLUMN_META[status] || { label: status, accent: '#94A3B8', dot: '#94A3B8' };
+  const { t } = useTranslation();
+  const meta = COLUMN_META[status] || { accent: '#94A3B8', dot: '#94A3B8' };
+  const label = t(`columns.${status}`, { defaultValue: status });
   const { setNodeRef, isOver } = useDroppable({ id: status });
 
   return (
@@ -30,7 +33,7 @@ export default function KanbanColumn({ status, tasks, onTaskClick, onAddTask, on
           {/* Colored dot */}
           <span className="w-2 h-2 rounded-full shrink-0" style={{ background: meta.dot }} />
           <h3 className="font-semibold text-sm" style={{ color: 'var(--text-1)' }}>
-            {meta.label}
+            {label}
           </h3>
           {/* Task count pill */}
           <span className="text-xs px-2 py-0.5 rounded-full font-medium tabular-nums"
@@ -44,7 +47,7 @@ export default function KanbanColumn({ status, tasks, onTaskClick, onAddTask, on
             onClick={onAddTask}
             className="w-6 h-6 rounded-lg flex items-center justify-center text-lg leading-none font-bold transition-colors"
             style={{ color: 'var(--accent)', background: 'transparent' }}
-            title="Ajouter une tâche"
+            title={t('board.addTask')}
             onMouseEnter={e => e.currentTarget.style.background = 'var(--accent-light)'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
           >
@@ -57,7 +60,7 @@ export default function KanbanColumn({ status, tasks, onTaskClick, onAddTask, on
       <div className="flex-1 p-3 min-h-[200px] overflow-y-auto">
         {tasks.length === 0 && (
           <div className="flex items-center justify-center h-24">
-            <p className="text-xs italic" style={{ color: 'var(--text-3)' }}>Aucune tâche</p>
+            <p className="text-xs italic" style={{ color: 'var(--text-3)' }}>{t('columns.noTask')}</p>
           </div>
         )}
         {tasks.map(task => (

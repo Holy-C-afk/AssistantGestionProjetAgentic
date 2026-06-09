@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import KanbanColumn from './KanbanColumn';
 import TaskCard from './TaskCard';
@@ -14,6 +15,7 @@ const byPriority = (a, b) =>
   (PRIORITY_ORDER[a.priority] ?? 99) - (PRIORITY_ORDER[b.priority] ?? 99);
 
 export default function KanbanBoard({ sprintId, projectId, onTaskClick, refreshKey, onAutoRefresh, isAdmin = true }) {
+  const { t } = useTranslation();
   const [board, setBoard] = useState(null);
   const [activeTask, setActiveTask] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -37,7 +39,6 @@ export default function KanbanBoard({ sprintId, projectId, onTaskClick, refreshK
         if (columns[s]) columns[s].push(t);
         else columns[s] = [t];
       });
-      // Sort each column by priority: Critique → Haute → Moyenne → Faible
       Object.keys(columns).forEach(k => columns[k].sort(byPriority));
       setBoard({ ...data, columns });
     } catch (e) {
@@ -63,7 +64,6 @@ export default function KanbanBoard({ sprintId, projectId, onTaskClick, refreshK
     const task = active.data.current?.task;
     if (!task || task.status === targetStatus) return;
 
-    // optimistic UI update — keep priority sort after move
     setBoard(prev => {
       if (!prev) return prev;
       const updated = { ...prev, columns: { ...prev.columns } };
@@ -75,8 +75,6 @@ export default function KanbanBoard({ sprintId, projectId, onTaskClick, refreshK
 
     try {
       const result = await moveTask(task.id, targetStatus);
-      // Fire a single onAutoRefresh with all four flags at once so
-      // handleAutoRefresh can decide what to refresh in one pass.
       if (result?.sprintAutoClosed || result?.projectAutoCompleted
           || result?.sprintReopened || result?.projectReactivated) {
         onAutoRefresh?.({
@@ -96,50 +94,43 @@ export default function KanbanBoard({ sprintId, projectId, onTaskClick, refreshK
     if (!newTitle.trim()) return;
     const title = newTitle.trim();
     try {
-      const result = await createTask({
-        projectId,
-        sprintId,
-        title,
-        priority: 'medium',
-      });
+      const result = await createTask({ projectId, sprintId, title, priority: 'medium' });
       setNewTitle('');
       setShowAdd(false);
       fetchBoard();
-      show({
-        type: 'success',
-        title: '✅ Tâche créée',
-        description: title,
-      });
-      // Sprint or project may have been reopened because a task was added to a closed sprint
+      show({ type: 'success', title: t('board.toast.created'), description: title });
       if (result?.sprintReopened || result?.projectReactivated) {
         onAutoRefresh?.({ sprintReopened: result.sprintReopened, projectReactivated: result.projectReactivated });
       }
     } catch (e) {
       console.error(e);
-      show({ type: 'error', title: 'Erreur', description: 'Impossible de créer la tâche.' });
+      show({ type: 'error', title: t('common.error'), description: t('board.errorCreate') });
     }
   };
 
   if (!sprintId) {
     return (
-      <div className="bg-white rounded-xl shadow p-10 text-center">
-        <p className="text-gray-400">Sélectionnez un sprint pour afficher le board.</p>
+      <div className="rounded-2xl border p-10 text-center"
+        style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+        <p style={{ color: 'var(--text-3)' }}>{t('board.selectSprint')}</p>
       </div>
     );
   }
 
   if (loading) {
     return (
-      <div className="bg-white rounded-xl shadow p-10 text-center">
-        <p className="text-gray-400">Chargement du board...</p>
+      <div className="rounded-2xl border p-10 text-center"
+        style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+        <p style={{ color: 'var(--text-3)' }}>{t('board.loading')}</p>
       </div>
     );
   }
 
   if (!board) {
     return (
-      <div className="bg-white rounded-xl shadow p-10 text-center">
-        <p className="text-gray-400">Impossible de charger le board.</p>
+      <div className="rounded-2xl border p-10 text-center"
+        style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+        <p style={{ color: 'var(--text-3)' }}>{t('board.error')}</p>
       </div>
     );
   }
@@ -147,27 +138,34 @@ export default function KanbanBoard({ sprintId, projectId, onTaskClick, refreshK
   return (
     <div>
       {showAdd && (
-        <div className="bg-white rounded-xl shadow p-4 mb-4 flex gap-2">
+        <div className="rounded-xl border p-4 mb-4 flex gap-2"
+          style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
           <input
             type="text"
             autoFocus
-            placeholder="Titre de la nouvelle tâche..."
+            placeholder={t('board.newTask')}
             value={newTitle}
             onChange={e => setNewTitle(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleAdd()}
-            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            onKeyDown={e => {
+              if (e.key === 'Enter') handleAdd();
+              if (e.key === 'Escape') { setShowAdd(false); setNewTitle(''); }
+            }}
+            className="flex-1 px-3 py-2 text-sm rounded-xl border outline-none transition-all"
+            style={{ background: 'var(--surface-2)', borderColor: 'var(--border)', color: 'var(--text-1)' }}
+            onFocus={e => e.target.style.borderColor = 'var(--accent)'}
+            onBlur={e => e.target.style.borderColor = 'var(--border)'}
           />
           <button
             onClick={handleAdd}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-indigo-700"
-          >
-            Créer
+            className="px-4 py-2 rounded-xl text-sm font-semibold text-white transition-colors"
+            style={{ background: 'var(--accent)' }}>
+            {t('board.create')}
           </button>
           <button
             onClick={() => { setShowAdd(false); setNewTitle(''); }}
-            className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-300"
-          >
-            Annuler
+            className="px-4 py-2 rounded-xl text-sm border transition-colors"
+            style={{ color: 'var(--text-2)', borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
+            {t('common.cancel')}
           </button>
         </div>
       )}

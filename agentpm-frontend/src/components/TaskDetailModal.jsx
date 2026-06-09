@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   getTask, updateTask, deleteTask,
   getTaskComments, addTaskComment, deleteTaskComment,
@@ -43,6 +44,7 @@ const IconTrash = () => (
 
 /* ────────────────────────────────────────────────────────────────── */
 export default function TaskDetailModal({ taskId, members = [], isAdmin = true, onClose, onUpdated, onAutoRefresh }) {
+  const { t } = useTranslation();
   const currentUserId = sessionStorage.getItem('userId');
 
   const [task,     setTask]     = useState(null);
@@ -67,15 +69,15 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
     setLoading(true); setSubTasks(null);
     setCreatingIdx(new Set()); setCreatedIdx(new Set());
     Promise.all([getTask(taskId), getTaskComments(taskId)])
-      .then(([t, c]) => {
-        setTask(t);
-        const effectiveIds = (t.assigneeIds && t.assigneeIds.length > 0)
-          ? t.assigneeIds
-          : (t.assigneeId ? [t.assigneeId] : []);
+      .then(([tsk, c]) => {
+        setTask(tsk);
+        const effectiveIds = (tsk.assigneeIds && tsk.assigneeIds.length > 0)
+          ? tsk.assigneeIds
+          : (tsk.assigneeId ? [tsk.assigneeId] : []);
         setForm({
-          title: t.title, description: t.description || '',
-          priority: t.priority, storyPoints: t.storyPoints ?? '',
-          assigneeIds: effectiveIds, tags: t.tags ?? [],
+          title: tsk.title, description: tsk.description || '',
+          priority: tsk.priority, storyPoints: tsk.storyPoints ?? '',
+          assigneeIds: effectiveIds, tags: tsk.tags ?? [],
         });
         setComments(c);
       })
@@ -101,7 +103,7 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
   };
 
   const handleDelete = async () => {
-    if (!confirm('Supprimer cette tâche ?')) return;
+    if (!confirm(t('task.confirmDelete'))) return;
     try {
       const result = await deleteTask(taskId);
       if (result?.sprintAutoClosed || result?.projectAutoCompleted) {
@@ -202,9 +204,9 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
             <div className="flex items-center justify-between px-6 py-4 shrink-0"
               style={{ borderBottom: '1px solid var(--border)' }}>
               <div>
-                <h2 className="text-base font-semibold" style={{ color: 'var(--text-1)' }}>Détail de la tâche</h2>
+                <h2 className="text-base font-semibold" style={{ color: 'var(--text-1)' }}>{t('task.detail')}</h2>
                 <p className="text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>
-                  {canEdit ? 'Vous pouvez modifier cette tâche.' : 'Mode lecture — non assigné.'}
+                  {canEdit ? t('task.canEdit') : t('task.readOnly')}
                 </p>
               </div>
               <button onClick={onClose}
@@ -229,22 +231,20 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                         d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                     </svg>
-                    Lecture seule — vous n'êtes pas assigné à cette tâche.
+                    {t('task.readOnly')}
                   </div>
                 )}
 
                 {/* Title */}
-                <ModalField label="Titre">
+                <ModalField label={t('task.title')}>
                   <input
                     value={form.title}
                     onChange={e => canEdit && setForm({ ...form, title: e.target.value })}
                     readOnly={!canEdit}
                     className="w-full px-4 py-3 text-base font-semibold rounded-xl border outline-none transition-all"
                     style={{
-                      background: canEdit ? 'var(--surface-2)' : 'var(--surface-2)',
-                      borderColor: 'var(--border)',
-                      color: 'var(--text-1)',
-                      cursor: canEdit ? 'text' : 'default',
+                      background: 'var(--surface-2)', borderColor: 'var(--border)',
+                      color: 'var(--text-1)', cursor: canEdit ? 'text' : 'default',
                     }}
                     onFocus={e => canEdit && (e.target.style.borderColor = 'var(--accent)')}
                     onBlur={e => e.target.style.borderColor = 'var(--border)'}
@@ -252,7 +252,7 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
                 </ModalField>
 
                 {/* Description */}
-                <ModalField label="Description">
+                <ModalField label={t('task.description')}>
                   <textarea
                     value={form.description}
                     onChange={e => canEdit && setForm({ ...form, description: e.target.value })}
@@ -270,7 +270,7 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
 
                 {/* Priority / Story Points / Status */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <ModalField label="Priorité">
+                  <ModalField label={t('task.priority')}>
                     <select
                       value={form.priority}
                       onChange={e => isAdmin && setForm({ ...form, priority: e.target.value })}
@@ -280,14 +280,14 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
                         background: 'var(--surface-2)', borderColor: 'var(--border)',
                         color: 'var(--text-1)', cursor: isAdmin ? 'pointer' : 'default',
                       }}>
-                      <option value="low">Faible</option>
-                      <option value="medium">Moyenne</option>
-                      <option value="high">Haute</option>
-                      <option value="critical">Critique</option>
+                      <option value="low">{t('task.priorities.low')}</option>
+                      <option value="medium">{t('task.priorities.medium')}</option>
+                      <option value="high">{t('task.priorities.high')}</option>
+                      <option value="critical">{t('task.priorities.critical')}</option>
                     </select>
                   </ModalField>
 
-                  <ModalField label="Story Points">
+                  <ModalField label={t('task.storyPoints')}>
                     <div className="flex gap-2">
                       <input
                         type="number" min="0" max="100"
@@ -295,26 +295,23 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
                         onChange={e => canEdit && setForm({ ...form, storyPoints: e.target.value })}
                         readOnly={!canEdit}
                         className="flex-1 px-3 py-2.5 text-sm rounded-xl border outline-none transition-all"
-                        style={{
-                          background: 'var(--surface-2)', borderColor: 'var(--border)',
-                          color: 'var(--text-1)',
-                        }}
+                        style={{ background: 'var(--surface-2)', borderColor: 'var(--border)', color: 'var(--text-1)' }}
                         onFocus={e => canEdit && (e.target.style.borderColor = 'var(--accent)')}
                         onBlur={e => e.target.style.borderColor = 'var(--border)'}
                       />
                       {isAdmin && (
                         <button type="button" onClick={handleEstimate} disabled={estimating}
-                          title="Estimation IA"
+                          title={t('task.estimateAI')}
                           className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-medium border transition-colors disabled:opacity-50"
                           style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderColor: 'var(--accent)' }}>
                           {estimating ? <IconSpin /> : <IconAI />}
-                          IA
+                          {t('task.estimateAI')}
                         </button>
                       )}
                     </div>
                   </ModalField>
 
-                  <ModalField label="Statut">
+                  <ModalField label={t('task.status')}>
                     <input value={task.status} disabled
                       className="w-full px-3 py-2.5 text-sm rounded-xl border"
                       style={{ background: 'var(--surface-2)', borderColor: 'var(--border)', color: 'var(--text-2)' }} />
@@ -322,8 +319,10 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
                 </div>
 
                 {/* Assignees */}
-                <ModalField label="Assigné à"
-                  badge={form.assigneeIds?.length > 0 ? `${form.assigneeIds.length} sélectionné${form.assigneeIds.length > 1 ? 's' : ''}` : null}>
+                <ModalField label={t('task.assignedTo')}
+                  badge={form.assigneeIds?.length > 0
+                    ? `${form.assigneeIds.length} ${form.assigneeIds.length > 1 ? t('task.selected_plural') : t('task.selected')}`
+                    : null}>
                   {isAdmin && members.length > 0 ? (
                     <div className="rounded-xl border overflow-hidden max-h-44 overflow-y-auto"
                       style={{ borderColor: 'var(--border)' }}>
@@ -371,14 +370,14 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
                               {n}
                             </span>
                           ))
-                        : <span className="text-sm italic" style={{ color: 'var(--text-3)' }}>Non assigné</span>
+                        : <span className="text-sm italic" style={{ color: 'var(--text-3)' }}>{t('task.notAssigned')}</span>
                       }
                     </div>
                   )}
                 </ModalField>
 
                 {/* Tags */}
-                <ModalField label="Tags">
+                <ModalField label={t('task.tags')}>
                   {form?.tags?.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 mb-2">
                       {form.tags.map((tag, i) => {
@@ -400,7 +399,7 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
                   )}
                   {isAdmin && (
                     <div className="flex gap-2">
-                      <input type="text" placeholder="Ajouter un tag…"
+                      <input type="text" placeholder={t('task.addTag')}
                         value={tagInput}
                         onChange={e => setTagInput(e.target.value)}
                         onKeyDown={e => {
@@ -416,12 +415,12 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
                       <button type="button" onClick={addTag}
                         className="px-3 py-2 rounded-xl text-sm border transition-colors"
                         style={{ background: 'var(--surface-2)', color: 'var(--text-2)', borderColor: 'var(--border)' }}>
-                        + Ajouter
+                        {t('task.tagBtn')}
                       </button>
                     </div>
                   )}
                   {!isAdmin && form?.tags?.length === 0 && (
-                    <p className="text-xs italic" style={{ color: 'var(--text-3)' }}>Aucun tag.</p>
+                    <p className="text-xs italic" style={{ color: 'var(--text-3)' }}>{t('task.noTags')}</p>
                   )}
                 </ModalField>
 
@@ -431,14 +430,14 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
                     <button onClick={handleSave} disabled={saving}
                       className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-colors disabled:opacity-50"
                       style={{ background: 'var(--accent)' }}>
-                      {saving ? <><IconSpin /> Enregistrement…</> : 'Enregistrer'}
+                      {saving ? <><IconSpin /> {t('task.saving')}</> : t('task.save')}
                     </button>
                   )}
                   {isAdmin && (
                     <button onClick={handleDecompose} disabled={decomposing}
                       className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border transition-colors disabled:opacity-50"
                       style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderColor: 'var(--accent)' }}>
-                      {decomposing ? <><IconSpin /> Décomposition…</> : <><IconAI /> Décomposer</>}
+                      {decomposing ? <><IconSpin /> {t('task.decomposing')}</> : <><IconAI /> {t('task.decompose')}</>}
                     </button>
                   )}
                   <button
@@ -446,13 +445,13 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
                     disabled={pdfLoading}
                     className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm border transition-colors disabled:opacity-50"
                     style={{ background: 'var(--surface-2)', color: 'var(--text-2)', borderColor: 'var(--border)' }}>
-                    {pdfLoading ? <IconSpin /> : <IconPdf />} PDF
+                    {pdfLoading ? <IconSpin /> : <IconPdf />} {t('task.pdf')}
                   </button>
                   {isAdmin && (
                     <button onClick={handleDelete}
                       className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm border transition-colors"
                       style={{ background: 'var(--danger-bg)', color: 'var(--danger)', borderColor: '#FCA5A5' }}>
-                      <IconTrash /> Supprimer
+                      <IconTrash /> {t('task.delete')}
                     </button>
                   )}
                 </div>
@@ -466,7 +465,7 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
                       <div className="flex items-center gap-2">
                         <IconAI />
                         <span className="text-sm font-semibold" style={{ color: 'var(--accent-text)' }}>
-                          Sous-tâches suggérées
+                          {t('task.aiSubtasks')}
                         </span>
                         <span className="text-xs px-2 py-0.5 rounded-full font-medium"
                           style={{ background: 'var(--accent)', color: '#fff' }}>
@@ -477,14 +476,14 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
                         <button onClick={handleCreateAll}
                           className="text-xs font-medium underline transition-opacity hover:opacity-70"
                           style={{ color: 'var(--accent-text)' }}>
-                          Tout créer
+                          {t('task.createAll')}
                         </button>
                       )}
                     </div>
                     <div className="p-3 space-y-2">
                       {subTasks.length === 0
                         ? <p className="text-sm text-center py-3 italic" style={{ color: 'var(--text-3)' }}>
-                            Aucune suggestion générée.
+                            {t('task.noSuggestions')}
                           </p>
                         : subTasks.map((st, i) => (
                             <div key={i}
@@ -502,7 +501,7 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
                                   ? { background: 'var(--success-bg)', color: 'var(--success)', borderColor: '#86EFAC' }
                                   : { background: 'var(--accent-light)', color: 'var(--accent)', borderColor: 'var(--accent)' }
                                 }>
-                                {creatingIdx.has(i) ? '…' : createdIdx.has(i) ? '✓ Créée' : '+ Créer'}
+                                {creatingIdx.has(i) ? '…' : createdIdx.has(i) ? t('task.createdSub') : t('task.createSub')}
                               </button>
                             </div>
                           ))
@@ -515,7 +514,7 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
               {/* ── Comments ──────────────────────────────────── */}
               <div className="px-6 pb-6" style={{ borderTop: '1px solid var(--border)' }}>
                 <h3 className="text-sm font-semibold pt-5 mb-4" style={{ color: 'var(--text-1)' }}>
-                  Commentaires
+                  {t('task.comments')}
                   <span className="ml-2 text-xs font-normal px-2 py-0.5 rounded-full"
                     style={{ background: 'var(--surface-2)', color: 'var(--text-3)' }}>
                     {comments.length}
@@ -524,7 +523,7 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
 
                 <div className="space-y-3 mb-4 max-h-56 overflow-y-auto">
                   {comments.length === 0 && (
-                    <p className="text-sm italic" style={{ color: 'var(--text-3)' }}>Aucun commentaire.</p>
+                    <p className="text-sm italic" style={{ color: 'var(--text-3)' }}>{t('task.noComments')}</p>
                   )}
                   {comments.map(c => (
                     <div key={c.id} className="rounded-xl p-3" style={{ background: 'var(--surface-2)' }}>
@@ -536,7 +535,7 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
                           </span>
                           <span className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>{c.authorName}</span>
                           <span className="text-xs" style={{ color: 'var(--text-3)' }}>
-                            {new Date(c.createdAt).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                            {new Date(c.createdAt).toLocaleString(undefined, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
                         <button onClick={() => handleDeleteComment(c.id)}
@@ -544,7 +543,7 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
                           style={{ color: 'var(--text-3)' }}
                           onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'}
                           onMouseLeave={e => e.currentTarget.style.color = 'var(--text-3)'}>
-                          Supprimer
+                          {t('task.deleteComment')}
                         </button>
                       </div>
                       <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--text-2)' }}>{c.content}</p>
@@ -553,7 +552,7 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
                 </div>
 
                 <form onSubmit={handleAddComment} className="flex gap-2">
-                  <input type="text" placeholder="Ajouter un commentaire…" value={newComment}
+                  <input type="text" placeholder={t('task.addComment')} value={newComment}
                     onChange={e => setNewComment(e.target.value)}
                     className="flex-1 px-4 py-2.5 text-sm rounded-xl border outline-none transition-all"
                     style={{ background: 'var(--surface-2)', borderColor: 'var(--border)', color: 'var(--text-1)' }}
@@ -563,7 +562,7 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
                   <button type="submit"
                     className="px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors"
                     style={{ background: 'var(--accent)' }}>
-                    Publier
+                    {t('task.publish')}
                   </button>
                 </form>
               </div>

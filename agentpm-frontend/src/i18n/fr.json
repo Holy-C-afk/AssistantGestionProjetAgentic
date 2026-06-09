@@ -1,0 +1,256 @@
+{
+  "common": {
+    "save":        "Enregistrer",
+    "saving":      "Enregistrement…",
+    "cancel":      "Annuler",
+    "delete":      "Supprimer",
+    "edit":        "Modifier",
+    "close":       "Fermer",
+    "add":         "Ajouter",
+    "create":      "Créer",
+    "loading":     "Chargement…",
+    "error":       "Erreur",
+    "confirm":     "Confirmer",
+    "back":        "Retour",
+    "yes":         "Oui",
+    "no":          "Non",
+    "optional":    "optionnel",
+    "required":    "requis",
+    "noDescription": "Aucune description",
+    "members":     "membres",
+    "member":      "membre",
+    "status":      "Statut",
+    "name":        "Nom",
+    "description": "Description",
+    "date":        "Date",
+    "unknown":     "Inconnu"
+  },
+  "nav": {
+    "projects":  "Projets",
+    "logout":    "Déconnexion",
+    "photo":     "Photo"
+  },
+  "login": {
+    "tagline":    "Pilotez vos projets avec l'IA.",
+    "subtitle":   "AgentPM combine la gestion de projet Agile avec un assistant intelligent — pour décomposer, estimer et livrer plus vite.",
+    "feature1":   "Kanban board multi-sprint",
+    "feature2":   "IA : décomposition et estimation automatique",
+    "feature3":   "Notifications et rapports PDF",
+    "signIn":     "Connexion",
+    "signInSub":  "Utilisez votre compte Microsoft pour accéder à votre espace.",
+    "btn":        "Se connecter avec Microsoft",
+    "secure":     "Authentification sécurisée via Azure AD"
+  },
+  "projects": {
+    "title":      "Mes projets",
+    "greeting":   "Bonjour, {{name}}",
+    "welcome":    "Bienvenue",
+    "new":        "Nouveau projet",
+    "total":      "Total",
+    "active":     "Actifs",
+    "completed":  "Terminés",
+    "archived":   "Archivés",
+    "all":        "Tous",
+    "searchPlaceholder": "Rechercher un projet…",
+    "search":     "Chercher",
+    "clearFilter":"Effacer",
+    "resultCount": "{{count}} projet",
+    "resultCount_plural": "{{count}} projets",
+    "resultSearch": " · « {{term}} »",
+    "noProjects": "Aucun projet pour l'instant",
+    "noResults":  "Aucun résultat pour « {{term}} »",
+    "createFirst":"Créez votre premier projet pour commencer.",
+    "tryOther":   "Essayez un autre terme.",
+    "createProject": "Créer un projet",
+    "membersCount": "{{count}} membre",
+    "membersCount_plural": "{{count}} membres",
+    "createdOn":  "Créé le",
+    "status": {
+      "active":    "Actif",
+      "archived":  "Archivé",
+      "completed": "Terminé"
+    },
+    "createModal": {
+      "title":       "Nouveau projet",
+      "subtitle":    "Renseignez les informations ci-dessous",
+      "namePlaceholder": "Ex : Refonte site web",
+      "descPlaceholder": "Décrivez brièvement le projet…",
+      "creating":    "Création…",
+      "submit":      "Créer le projet"
+    },
+    "deleteModal": {
+      "title":    "Supprimer le projet ?",
+      "subtitle": "Cette action est irréversible",
+      "body":     "Tous les sprints, tâches et commentaires associés seront définitivement supprimés.",
+      "confirm":  "Supprimer"
+    },
+    "errors": {
+      "load":   "Impossible de charger les projets. Vérifiez que le backend est démarré.",
+      "create": "Erreur lors de la création du projet.",
+      "delete": "Erreur lors de la suppression du projet."
+    }
+  },
+  "project": {
+    "backToProjects": "Retour aux projets",
+    "createdOn":  "Créé le",
+    "noDescription": "Pas de description",
+    "tabs": {
+      "board":   "Sprint Board",
+      "members": "Membres ({{count}})"
+    },
+    "actions": {
+      "edit":       "Modifier",
+      "archive":    "Archiver",
+      "complete":   "Terminer",
+      "reactivate": "Réactiver",
+      "pdf":        "PDF",
+      "pdfLoading": "PDF…"
+    },
+    "status": {
+      "active":    "Actif",
+      "archived":  "Archivé",
+      "completed": "Terminé"
+    },
+    "roles": {
+      "admin":  "Chef de projet",
+      "owner":  "Chef de projet",
+      "member": "Collaborateur",
+      "viewer": "Observateur"
+    },
+    "members": {
+      "add":           "Ajouter un utilisateur",
+      "searchPlaceholder": "Rechercher par nom ou email…",
+      "current":       "Membres actuels",
+      "noMembers":     "Aucun membre pour l'instant.",
+      "noUsers":       "Aucun utilisateur enregistré.",
+      "noResults":     "Aucun résultat correspondant.",
+      "onlyRegistered":"Seuls les utilisateurs connectés au moins une fois apparaissent.",
+      "addAs":         "Ajouter {{name}} en tant que :",
+      "roleCollaborateur": "Collaborateur",
+      "roleChef":      "Chef de projet",
+      "adding":        "Ajout…",
+      "addBtn":        "+ Ajouter",
+      "remove":        "Retirer du projet"
+    },
+    "errors": {
+      "status": "Erreur lors du changement de statut.",
+      "pdf":    "Erreur lors de la génération du PDF."
+    },
+    "confirmStatus": "Confirmer : passer le projet en « {{status}} » ?"
+  },
+  "sprint": {
+    "sprints":     "Sprints",
+    "newSprint":   "+ Sprint",
+    "cancelForm":  "Annuler",
+    "newSprintTitle": "Nouveau sprint",
+    "name":        "Nom",
+    "goal":        "Objectif",
+    "startDate":   "Début",
+    "endDate":     "Fin",
+    "create":      "Créer",
+    "tasks":       "tâche",
+    "tasks_plural":"tâches",
+    "pts":         "pts",
+    "status": {
+      "planned":   "Planifié",
+      "active":    "Actif",
+      "closed":    "Clôturé",
+      "completed": "Terminé"
+    },
+    "dates":       "Dates",
+    "editDates":   "Modifier les dates",
+    "close":       "Clôturer",
+    "delete":      "Supprimer",
+    "save":        "Enregistrer",
+    "noSprints":   "Aucun sprint",
+    "confirmClose":"Clôturer ce sprint ?",
+    "confirmDelete":"Supprimer ce sprint ?",
+    "closedBlocked":"Clôture bloquée",
+    "notificationsSent": "Notifications envoyées aux membres concernés.",
+    "unfinishedTasks": "Tâches non terminées :",
+    "errors": {
+      "create": "Erreur lors de la création.",
+      "close":  "Impossible de clôturer.",
+      "delete": "Impossible de supprimer.",
+      "dates":  "Impossible de modifier les dates."
+    },
+    "toast": {
+      "created":      "Sprint créé",
+      "closed":       "Sprint clôturé",
+      "datesUpdated": "Dates mises à jour",
+      "closedBlocked":"Clôture bloquée",
+      "unfinished":   "tâche(s) non terminée(s)"
+    }
+  },
+  "board": {
+    "selectSprint": "Sélectionnez un sprint pour afficher le board.",
+    "loading":      "Chargement du board…",
+    "error":        "Impossible de charger le board.",
+    "newTask":      "Titre de la nouvelle tâche…",
+    "create":       "Créer",
+    "addTask":      "Ajouter une tâche",
+    "errorCreate":  "Impossible de créer la tâche.",
+    "toast": {
+      "created": "Tâche créée"
+    }
+  },
+  "columns": {
+    "todo":        "À faire",
+    "clarifier":   "À clarifier",
+    "in_progress": "En cours",
+    "done":        "Terminé",
+    "blocked":     "Bloqué",
+    "noTask":      "Aucune tâche"
+  },
+  "task": {
+    "detail":      "Détail de la tâche",
+    "canEdit":     "Vous pouvez modifier cette tâche.",
+    "readOnly":    "Lecture seule — non assigné.",
+    "title":       "Titre",
+    "description": "Description",
+    "priority":    "Priorité",
+    "storyPoints": "Story Points",
+    "status":      "Statut",
+    "assignedTo":  "Assigné à",
+    "selected":    "sélectionné",
+    "selected_plural": "sélectionnés",
+    "tags":        "Tags",
+    "noTags":      "Aucun tag.",
+    "notAssigned": "Non assigné",
+    "addTag":      "Ajouter un tag…",
+    "tagBtn":      "+ Ajouter",
+    "tagHint":     "Entrée ou virgule pour ajouter",
+    "save":        "Enregistrer",
+    "saving":      "Enregistrement…",
+    "delete":      "Supprimer",
+    "pdf":         "PDF",
+    "decompose":   "Décomposer",
+    "decomposing": "Décomposition…",
+    "estimateAI":  "IA",
+    "comments":    "Commentaires",
+    "noComments":  "Aucun commentaire.",
+    "addComment":  "Ajouter un commentaire…",
+    "publish":     "Publier",
+    "deleteComment":"Supprimer",
+    "aiSubtasks":  "Sous-tâches suggérées",
+    "createAll":   "Tout créer",
+    "noSuggestions": "Aucune suggestion générée.",
+    "createSub":   "+ Créer",
+    "createdSub":  "✓ Créée",
+    "confirmDelete":"Supprimer cette tâche ?",
+    "priorities": {
+      "low":      "Faible",
+      "medium":   "Moyenne",
+      "high":     "Haute",
+      "critical": "Critique"
+    },
+    "tagPopover": {
+      "placeholder": "Nouveau tag…",
+      "hint":        "Entrée ou virgule pour ajouter"
+    },
+    "errors": {
+      "create": "Impossible de créer la tâche.",
+      "move403": "Seul le chef de projet peut rouvrir une tâche terminée."
+    }
+  }
+}

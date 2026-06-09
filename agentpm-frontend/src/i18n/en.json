@@ -1,0 +1,256 @@
+{
+  "common": {
+    "save":        "Save",
+    "saving":      "Saving…",
+    "cancel":      "Cancel",
+    "delete":      "Delete",
+    "edit":        "Edit",
+    "close":       "Close",
+    "add":         "Add",
+    "create":      "Create",
+    "loading":     "Loading…",
+    "error":       "Error",
+    "confirm":     "Confirm",
+    "back":        "Back",
+    "yes":         "Yes",
+    "no":          "No",
+    "optional":    "optional",
+    "required":    "required",
+    "noDescription": "No description",
+    "members":     "members",
+    "member":      "member",
+    "status":      "Status",
+    "name":        "Name",
+    "description": "Description",
+    "date":        "Date",
+    "unknown":     "Unknown"
+  },
+  "nav": {
+    "projects":  "Projects",
+    "logout":    "Log out",
+    "photo":     "Photo"
+  },
+  "login": {
+    "tagline":    "Manage your projects with AI.",
+    "subtitle":   "AgentPM combines Agile project management with an intelligent assistant — to break down, estimate and ship faster.",
+    "feature1":   "Multi-sprint Kanban board",
+    "feature2":   "AI: automatic decomposition and estimation",
+    "feature3":   "Notifications and PDF reports",
+    "signIn":     "Sign in",
+    "signInSub":  "Use your Microsoft account to access your workspace.",
+    "btn":        "Sign in with Microsoft",
+    "secure":     "Secured by Azure AD"
+  },
+  "projects": {
+    "title":      "My Projects",
+    "greeting":   "Hello, {{name}}",
+    "welcome":    "Welcome",
+    "new":        "New project",
+    "total":      "Total",
+    "active":     "Active",
+    "completed":  "Completed",
+    "archived":   "Archived",
+    "all":        "All",
+    "searchPlaceholder": "Search a project…",
+    "search":     "Search",
+    "clearFilter":"Clear",
+    "resultCount": "{{count}} project",
+    "resultCount_plural": "{{count}} projects",
+    "resultSearch": " · \"{{term}}\"",
+    "noProjects": "No projects yet",
+    "noResults":  "No results for \"{{term}}\"",
+    "createFirst":"Create your first project to get started.",
+    "tryOther":   "Try a different search term.",
+    "createProject": "Create a project",
+    "membersCount": "{{count}} member",
+    "membersCount_plural": "{{count}} members",
+    "createdOn":  "Created",
+    "status": {
+      "active":    "Active",
+      "archived":  "Archived",
+      "completed": "Completed"
+    },
+    "createModal": {
+      "title":       "New project",
+      "subtitle":    "Fill in the details below",
+      "namePlaceholder": "E.g. Website redesign",
+      "descPlaceholder": "Briefly describe the project…",
+      "creating":    "Creating…",
+      "submit":      "Create project"
+    },
+    "deleteModal": {
+      "title":    "Delete project?",
+      "subtitle": "This action cannot be undone",
+      "body":     "All sprints, tasks and comments will be permanently deleted.",
+      "confirm":  "Delete"
+    },
+    "errors": {
+      "load":   "Could not load projects. Make sure the backend is running.",
+      "create": "Error creating project.",
+      "delete": "Error deleting project."
+    }
+  },
+  "project": {
+    "backToProjects": "Back to projects",
+    "createdOn":  "Created on",
+    "noDescription": "No description",
+    "tabs": {
+      "board":   "Sprint Board",
+      "members": "Members ({{count}})"
+    },
+    "actions": {
+      "edit":       "Edit",
+      "archive":    "Archive",
+      "complete":   "Complete",
+      "reactivate": "Reactivate",
+      "pdf":        "PDF",
+      "pdfLoading": "PDF…"
+    },
+    "status": {
+      "active":    "Active",
+      "archived":  "Archived",
+      "completed": "Completed"
+    },
+    "roles": {
+      "admin":  "Project manager",
+      "owner":  "Project manager",
+      "member": "Collaborator",
+      "viewer": "Observer"
+    },
+    "members": {
+      "add":           "Add a user",
+      "searchPlaceholder": "Search by name or email…",
+      "current":       "Current members",
+      "noMembers":     "No members yet.",
+      "noUsers":       "No registered users.",
+      "noResults":     "No matching results.",
+      "onlyRegistered":"Only users who have signed in at least once appear here.",
+      "addAs":         "Add {{name}} as:",
+      "roleCollaborateur": "Collaborator",
+      "roleChef":      "Project manager",
+      "adding":        "Adding…",
+      "addBtn":        "+ Add",
+      "remove":        "Remove from project"
+    },
+    "errors": {
+      "status": "Error changing status.",
+      "pdf":    "Error generating PDF."
+    },
+    "confirmStatus": "Confirm: set project status to \"{{status}}\"?"
+  },
+  "sprint": {
+    "sprints":     "Sprints",
+    "newSprint":   "+ Sprint",
+    "cancelForm":  "Cancel",
+    "newSprintTitle": "New sprint",
+    "name":        "Name",
+    "goal":        "Goal",
+    "startDate":   "Start",
+    "endDate":     "End",
+    "create":      "Create",
+    "tasks":       "task",
+    "tasks_plural":"tasks",
+    "pts":         "pts",
+    "status": {
+      "planned":   "Planned",
+      "active":    "Active",
+      "closed":    "Closed",
+      "completed": "Completed"
+    },
+    "dates":       "Dates",
+    "editDates":   "Edit dates",
+    "close":       "Close sprint",
+    "delete":      "Delete",
+    "save":        "Save",
+    "noSprints":   "No sprints",
+    "confirmClose":"Close this sprint?",
+    "confirmDelete":"Delete this sprint?",
+    "closedBlocked":"Sprint closure blocked",
+    "notificationsSent": "Notifications sent to affected members.",
+    "unfinishedTasks": "Unfinished tasks:",
+    "errors": {
+      "create": "Error creating sprint.",
+      "close":  "Could not close sprint.",
+      "delete": "Could not delete sprint.",
+      "dates":  "Could not update dates."
+    },
+    "toast": {
+      "created":      "Sprint created",
+      "closed":       "Sprint closed",
+      "datesUpdated": "Dates updated",
+      "closedBlocked":"Closure blocked",
+      "unfinished":   "unfinished task(s)"
+    }
+  },
+  "board": {
+    "selectSprint": "Select a sprint to display the board.",
+    "loading":      "Loading board…",
+    "error":        "Could not load the board.",
+    "newTask":      "New task title…",
+    "create":       "Create",
+    "addTask":      "Add a task",
+    "errorCreate":  "Could not create task.",
+    "toast": {
+      "created": "Task created"
+    }
+  },
+  "columns": {
+    "todo":        "To do",
+    "clarifier":   "To clarify",
+    "in_progress": "In progress",
+    "done":        "Done",
+    "blocked":     "Blocked",
+    "noTask":      "No tasks"
+  },
+  "task": {
+    "detail":      "Task details",
+    "canEdit":     "You can edit this task.",
+    "readOnly":    "Read-only — you are not assigned to this task.",
+    "title":       "Title",
+    "description": "Description",
+    "priority":    "Priority",
+    "storyPoints": "Story Points",
+    "status":      "Status",
+    "assignedTo":  "Assigned to",
+    "selected":    "selected",
+    "selected_plural": "selected",
+    "tags":        "Tags",
+    "noTags":      "No tags.",
+    "notAssigned": "Not assigned",
+    "addTag":      "Add a tag…",
+    "tagBtn":      "+ Add",
+    "tagHint":     "Press Enter or comma to add",
+    "save":        "Save",
+    "saving":      "Saving…",
+    "delete":      "Delete",
+    "pdf":         "PDF",
+    "decompose":   "Decompose",
+    "decomposing": "Decomposing…",
+    "estimateAI":  "AI",
+    "comments":    "Comments",
+    "noComments":  "No comments yet.",
+    "addComment":  "Add a comment…",
+    "publish":     "Post",
+    "deleteComment":"Delete",
+    "aiSubtasks":  "AI-suggested subtasks",
+    "createAll":   "Create all",
+    "noSuggestions": "No suggestions generated.",
+    "createSub":   "+ Create",
+    "createdSub":  "✓ Created",
+    "confirmDelete":"Delete this task?",
+    "priorities": {
+      "low":      "Low",
+      "medium":   "Medium",
+      "high":     "High",
+      "critical": "Critical"
+    },
+    "tagPopover": {
+      "placeholder": "New tag…",
+      "hint":        "Enter or comma to add"
+    },
+    "errors": {
+      "create": "Could not create task.",
+      "move403": "Only the project manager can reopen a completed task."
+    }
+  }
+}
