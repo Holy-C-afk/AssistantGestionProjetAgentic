@@ -19,12 +19,22 @@ builder.Services.AddScoped<ISprintBoardRepository, SprintBoardRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<EventLogger>();
 
+// ── Email (SendGrid REST API — no SMTP password needed) ──
+builder.Services.AddHttpClient(); // default named client for SendGridEmailService
+builder.Services.AddSingleton<IEmailService, SendGridEmailService>();
+
+// ── Sprint deadline background monitor ───────────────────
+builder.Services.AddHostedService<SprintDeadlineMonitor>();
+
 // ── Database ──────────────────────────────────────────────
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(
-        builder.Configuration.GetConnectionString("DefaultConnection"),
-        o => o.UseVector()
-    )
+    options
+        .UseNpgsql(
+            builder.Configuration.GetConnectionString("DefaultConnection"),
+            o => o.UseVector()
+        )
+        .ConfigureWarnings(w =>
+            w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning))
 );
 
 // ── Azure AD auth is handled by the frontend (MSAL).
@@ -97,6 +107,18 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     await db.Database.MigrateAsync();
+
+    // Ensure Tags column exists (idempotent — safe to run every startup)
+    await db.Database.ExecuteSqlRawAsync(
+        "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS \"Tags\" jsonb NOT NULL DEFAULT '[]'::jsonb;");
+
+    // Ensure PhotoUrl column exists on Users
+    await db.Database.ExecuteSqlRawAsync(
+        "ALTER TABLE \"Users\" ADD COLUMN IF NOT EXISTS \"PhotoUrl\" text NULL;");
+
+    // Migrate legacy 'owner' role → 'admin' (Chef de projet) — idempotent
+    await db.Database.ExecuteSqlRawAsync(
+        "UPDATE \"ProjectMembers\" SET \"Role\" = 'admin' WHERE \"Role\" = 'owner';");
 }
 
 app.Run();

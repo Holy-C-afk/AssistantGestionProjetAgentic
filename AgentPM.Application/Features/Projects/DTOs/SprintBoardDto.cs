@@ -18,5 +18,7 @@ public record BoardTaskDto(
     Guid? AssigneeId,
     string? AssigneeName,
     int Order,
-    int CommentCount
+    int CommentCount,
+    List<string>? Tags = null,
+    string? AssigneePhotoUrl = null
 );

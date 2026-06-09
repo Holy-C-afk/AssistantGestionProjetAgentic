@@ -14,6 +14,9 @@ export const updateTask = (id, data) =>
 export const moveTask = (id, status, order) =>
   api.patch(`/tasks/${id}/move`, { status, order }).then(r => r.data);
 
+export const patchTaskPriority = (id, priority) =>
+  api.put(`/tasks/${id}`, { priority }).then(r => r.data);
+
 export const deleteTask = (id) =>
   api.delete(`/tasks/${id}`).then(r => r.data);
 
@@ -25,3 +28,13 @@ export const addTaskComment = (id, content, authorId) =>
 
 export const deleteTaskComment = (taskId, commentId) =>
   api.delete(`/tasks/${taskId}/comments/${commentId}`).then(r => r.data);
+
+export const exportTaskPdf = async (taskId, taskTitle) => {
+  const res = await api.get(`/tasks/${taskId}/pdf`, { responseType: 'blob' });
+  const url = URL.createObjectURL(res.data);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `tache-${taskTitle?.slice(0, 40) ?? taskId}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
+};

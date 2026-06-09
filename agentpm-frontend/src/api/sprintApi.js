@@ -22,3 +22,6 @@ export const createSprint = (projectId, data) =>
 
 export const closeSprint = (projectId, sprintId) =>
   api.post(`/project/${projectId}/sprints/${sprintId}/close`).then(r => r.data);
+
+export const updateSprintDates = (projectId, sprintId, data) =>
+  api.patch(`/project/${projectId}/sprints/${sprintId}/dates`, data).then(r => r.data);

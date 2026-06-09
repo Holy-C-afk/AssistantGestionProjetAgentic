@@ -1,24 +1,24 @@
-import { PublicClientApplication } from '@azure/msal-browser';
 import { MsalProvider } from '@azure/msal-react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { msalConfig } from './auth/authConfig';
+import { msalInstance } from './auth/msalInstance';
 import AuthGuard from './components/AuthGuard';
 import Navbar from './components/Navbar';
 import ProjectsPage from './pages/ProjectsPage';
 import ProjectDetailPage from './pages/ProjectDetailPage';
-
-const msalInstance = new PublicClientApplication(msalConfig);
+import { ToastProvider } from './context/ToastContext';
 
 export default function App() {
   return (
     <MsalProvider instance={msalInstance}>
       <BrowserRouter>
         <AuthGuard>
-          <Navbar />
-          <Routes>
-            <Route path="/" element={<ProjectsPage />} />
-            <Route path="/projects/:id" element={<ProjectDetailPage />} />
-          </Routes>
+          <ToastProvider>
+            <Navbar />
+            <Routes>
+              <Route path="/" element={<ProjectsPage />} />
+              <Route path="/projects/:id" element={<ProjectDetailPage />} />
+            </Routes>
+          </ToastProvider>
         </AuthGuard>
       </BrowserRouter>
     </MsalProvider>

@@ -1,11 +1,18 @@
 ﻿using AgentPM.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace AgentPM.Infrastructure.Persistence;
 
 public class AppDbContext : DbContext
 {
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        optionsBuilder.ConfigureWarnings(w =>
+            w.Ignore(RelationalEventId.PendingModelChangesWarning));
+    }
 
     public DbSet<User> Users => Set<User>();
     public DbSet<Project> Projects => Set<Project>();
@@ -63,6 +70,7 @@ public class AppDbContext : DbContext
             e.HasOne(x => x.Assignee).WithMany().HasForeignKey(x => x.AssigneeId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.CreatedBy).WithMany().HasForeignKey(x => x.CreatedById).OnDelete(DeleteBehavior.Restrict);
             e.Property(x => x.Order).HasColumnName("order");
+            e.Property(x => x.Tags).HasColumnType("jsonb").HasDefaultValueSql("'[]'::jsonb");
         });
 
         modelBuilder.Entity<TaskDependency>(e =>

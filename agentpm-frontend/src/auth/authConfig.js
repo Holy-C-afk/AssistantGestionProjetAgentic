@@ -25,7 +25,12 @@ export const apiRequest = {
   ],
 };
 
-// Microsoft Graph – used only to fetch the user's profile photo
+// Microsoft Graph – profile photo + email sending
 export const graphRequest = {
   scopes: ["User.Read"],
+};
+
+// Graph scope for sending mail (Mail.Send delegated)
+export const mailRequest = {
+  scopes: ["Mail.Send"],
 };

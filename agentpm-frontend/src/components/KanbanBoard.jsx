@@ -4,15 +4,22 @@ import KanbanColumn from './KanbanColumn';
 import TaskCard from './TaskCard';
 import { getSprintBoard } from '../api/sprintApi';
 import { moveTask, createTask } from '../api/taskApi';
+import { useToast } from '../context/ToastContext';
 
 const COLUMNS = ['todo', 'clarifier', 'in_progress', 'done', 'blocked'];
 
-export default function KanbanBoard({ sprintId, projectId, onTaskClick, refreshKey, onAutoRefresh }) {
+// Critical → High → Medium → Low
+const PRIORITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
+const byPriority = (a, b) =>
+  (PRIORITY_ORDER[a.priority] ?? 99) - (PRIORITY_ORDER[b.priority] ?? 99);
+
+export default function KanbanBoard({ sprintId, projectId, onTaskClick, refreshKey, onAutoRefresh, isAdmin = true }) {
   const [board, setBoard] = useState(null);
   const [activeTask, setActiveTask] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [newTitle, setNewTitle] = useState('');
+  const { show } = useToast();
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -24,12 +31,14 @@ export default function KanbanBoard({ sprintId, projectId, onTaskClick, refreshK
     try {
       const data = await getSprintBoard(projectId, sprintId);
       const rawTasks = data.tasks ?? data.Tasks ?? [];
-      const columns = { todo: [], in_progress: [], done: [], blocked: [] };
+      const columns = { todo: [], clarifier: [], in_progress: [], done: [], blocked: [] };
       rawTasks.forEach(t => {
         const s = t.status ?? t.Status;
         if (columns[s]) columns[s].push(t);
         else columns[s] = [t];
       });
+      // Sort each column by priority: Critique → Haute → Moyenne → Faible
+      Object.keys(columns).forEach(k => columns[k].sort(byPriority));
       setBoard({ ...data, columns });
     } catch (e) {
       console.error(e);
@@ -54,12 +63,13 @@ export default function KanbanBoard({ sprintId, projectId, onTaskClick, refreshK
     const task = active.data.current?.task;
     if (!task || task.status === targetStatus) return;
 
-    // optimistic UI update
+    // optimistic UI update — keep priority sort after move
     setBoard(prev => {
       if (!prev) return prev;
       const updated = { ...prev, columns: { ...prev.columns } };
       updated.columns[task.status] = (updated.columns[task.status] || []).filter(t => t.id !== task.id);
-      updated.columns[targetStatus] = [...(updated.columns[targetStatus] || []), { ...task, status: targetStatus }];
+      const dest = [...(updated.columns[targetStatus] || []), { ...task, status: targetStatus }];
+      updated.columns[targetStatus] = dest.sort(byPriority);
       return updated;
     });
 
@@ -77,22 +87,29 @@ export default function KanbanBoard({ sprintId, projectId, onTaskClick, refreshK
 
   const handleAdd = async () => {
     if (!newTitle.trim()) return;
+    const title = newTitle.trim();
     try {
       const result = await createTask({
         projectId,
         sprintId,
-        title: newTitle.trim(),
+        title,
         priority: 'medium',
       });
       setNewTitle('');
       setShowAdd(false);
       fetchBoard();
+      show({
+        type: 'success',
+        title: '✅ Tâche créée',
+        description: title,
+      });
       // Sprint or project may have been reopened because a task was added to a closed sprint
       if (result?.sprintReopened || result?.projectReactivated) {
         onAutoRefresh?.({ sprintReopened: result.sprintReopened, projectReactivated: result.projectReactivated });
       }
     } catch (e) {
       console.error(e);
+      show({ type: 'error', title: 'Erreur', description: 'Impossible de créer la tâche.' });
     }
   };
 
@@ -160,7 +177,8 @@ export default function KanbanBoard({ sprintId, projectId, onTaskClick, refreshK
               status={status}
               tasks={board.columns?.[status] || []}
               onTaskClick={onTaskClick}
-              onAddTask={status === 'todo' ? () => setShowAdd(true) : undefined}
+              onAddTask={isAdmin && status === 'todo' ? () => setShowAdd(true) : undefined}
+              onPriorityChanged={fetchBoard}
             />
           ))}
         </div>

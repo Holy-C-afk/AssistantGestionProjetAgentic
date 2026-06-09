@@ -17,6 +17,7 @@ namespace AgentPM.Domain.Entities
         public Guid? AssigneeId { get; set; }
         public Guid CreatedById { get; set; }
         public int Order { get; set; } = 0;
+        public List<string> Tags { get; set; } = [];
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 

@@ -15,7 +15,9 @@ public record TaskDto(
     int Order,
     DateTime CreatedAt,
     DateTime UpdatedAt,
-    int CommentCount);
+    int CommentCount,
+    List<string>? Tags = null,
+    string? AssigneePhotoUrl = null);
 
 public record CreateTaskRequest(
     Guid ProjectId,
@@ -24,7 +26,8 @@ public record CreateTaskRequest(
     string? Description,
     string? Priority,
     int? StoryPoints,
-    Guid? AssigneeId);
+    Guid? AssigneeId,
+    List<string>? Tags = null);
 
 public record UpdateTaskRequest(
     string? Title,
@@ -32,7 +35,8 @@ public record UpdateTaskRequest(
     string? Priority,
     int? StoryPoints,
     Guid? AssigneeId,
-    Guid? SprintId);
+    Guid? SprintId,
+    List<string>? Tags = null);
 
 public record MoveTaskRequest(string Status, int? Order);
 

@@ -12,15 +12,20 @@ namespace AgentPM.Api.Controllers;
 [Route("api/project/{projectId:guid}/sprints")]
 public class SprintController : ControllerBase
 {
-    private readonly IMediator   _mediator;
-    private readonly AppDbContext _db;
-    private readonly EventLogger  _events;
+    private readonly IMediator            _mediator;
+    private readonly AppDbContext         _db;
+    private readonly EventLogger          _events;
+    private readonly IEmailService        _email;
+    private readonly IServiceScopeFactory _scopeFactory;
 
-    public SprintController(IMediator mediator, AppDbContext db, EventLogger events)
+    public SprintController(IMediator mediator, AppDbContext db, EventLogger events,
+                             IEmailService email, IServiceScopeFactory scopeFactory)
     {
-        _mediator = mediator;
-        _db       = db;
-        _events   = events;
+        _mediator     = mediator;
+        _db           = db;
+        _events       = events;
+        _email        = email;
+        _scopeFactory = scopeFactory;
     }
 
     // GET api/project/{projectId}/sprints
@@ -74,6 +79,28 @@ public class SprintController : ControllerBase
             new { sprint = result, projectReactivated });
     }
 
+    // PATCH api/project/{projectId}/sprints/{id}/dates
+    [HttpPatch("{id:guid}/dates")]
+    public async Task<IActionResult> UpdateDates(Guid projectId, Guid id,
+        [FromBody] UpdateSprintDatesRequest request)
+    {
+        var sprint = await _db.Sprints
+            .FirstOrDefaultAsync(s => s.Id == id && s.ProjectId == projectId);
+        if (sprint is null) return NotFound();
+
+        if (request.StartDate.HasValue && request.EndDate.HasValue
+            && request.StartDate >= request.EndDate)
+            return BadRequest(new { message = "La date de début doit être antérieure à la date de fin." });
+
+        if (request.StartDate.HasValue) sprint.StartDate = request.StartDate;
+        if (request.EndDate.HasValue)   sprint.EndDate   = request.EndDate;
+        // Allow clearing a date by passing null explicitly
+        if (request.ClearEndDate == true) sprint.EndDate = null;
+
+        await _db.SaveChangesAsync();
+        return Ok(new { sprint.Id, sprint.StartDate, sprint.EndDate });
+    }
+
     // DELETE api/project/{projectId}/sprints/{id}
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid projectId, Guid id)
@@ -82,6 +109,14 @@ public class SprintController : ControllerBase
             .Include(s => s.Tasks)
             .FirstOrDefaultAsync(s => s.Id == id && s.ProjectId == projectId);
         if (sprint is null) return NotFound();
+
+        // Block deletion if any task is already started (not "todo")
+        var startedTasks = sprint.Tasks.Where(t => t.Status != "todo").ToList();
+        if (startedTasks.Any())
+            return BadRequest(new
+            {
+                message = $"Impossible de supprimer : {startedTasks.Count} tâche(s) déjà commencée(s) ou terminée(s)."
+            });
 
         // Move sprint tasks back to backlog (don't hard-delete them)
         foreach (var t in sprint.Tasks)
@@ -122,8 +157,108 @@ public class SprintController : ControllerBase
     [HttpPost("{id:guid}/close")]
     public async Task<IActionResult> Close(Guid projectId, Guid id)
     {
-        var result = await _mediator.Send(new CloseSprintCommand(id));
-        return Ok(result);
+        // Load sprint with all relationships needed for email notifications
+        var sprint = await _db.Sprints
+            .Where(s => s.Id == id && s.ProjectId == projectId)
+            .Include(s => s.Project)
+                .ThenInclude(p => p.Members)
+                    .ThenInclude(m => m.User)
+            .Include(s => s.Tasks)
+                .ThenInclude(t => t.Assignee)
+            .FirstOrDefaultAsync();
+
+        if (sprint is null) return NotFound();
+
+        // ── Block closure if unfinished tasks remain ─────────────────────
+        var unfinished = sprint.Tasks.Where(t => t.Status != "done").ToList();
+        if (unfinished.Any())
+        {
+            var projectName = sprint.Project.Name;
+
+            // Capture data before Task.Run (sprint entity may be collected)
+            var sprintName    = sprint.Name;
+            var sprintEndDate = sprint.EndDate;
+            var unfinishedSnap = unfinished.Select(t => new
+            {
+                t.Title,
+                AssigneeEmail = t.Assignee?.Email,
+                AssigneeName  = t.Assignee?.FullName,
+            }).ToList();
+            var chefEmails = sprint.Project.Members
+                .Where(m => m.Role is "admin" or "owner")
+                .Select(m => new { m.User.Email, m.User.FullName })
+                .ToList();
+
+            // Send notifications in background — use captured primitives (no _db / EF entities)
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    // 1. Notify each assignee
+                    foreach (var grp in unfinishedSnap
+                        .Where(t => t.AssigneeEmail != null)
+                        .GroupBy(t => new { t.AssigneeEmail, t.AssigneeName }))
+                    {
+                        var taskTitles = grp.Select(t => t.Title);
+                        var subject    = $"⚠️ Sprint en cours de clôture — tâches non terminées : {sprintName}";
+                        var html       = SprintEmailTemplates.AssigneeNotification(
+                                             grp.Key.AssigneeName!, sprintName,
+                                             projectName, taskTitles, sprintEndDate);
+                        await _email.SendAsync(grp.Key.AssigneeEmail!, subject, html);
+                    }
+
+                    // 2. Notify all chefs de projet
+                    var taskRows = unfinishedSnap
+                        .Select(t => (t.Title, t.AssigneeName ?? "Non assigné"))
+                        .ToList();
+
+                    foreach (var chef in chefEmails)
+                    {
+                        var subject = $"🚫 Clôture bloquée : sprint {sprintName} ({projectName})";
+                        var html    = SprintEmailTemplates.ChefDeProjetNotification(
+                                          chef.FullName, sprintName, projectName,
+                                          unfinishedSnap.Count, taskRows, sprintEndDate);
+                        await _email.SendAsync(chef.Email, subject, html);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"[SprintClose email error] {ex.Message}");
+                }
+            });
+
+            return BadRequest(new
+            {
+                message = $"Impossible de clôturer le sprint : {unfinished.Count} tâche(s) non terminée(s). " +
+                          "Les personnes concernées ont été notifiées par e-mail.",
+                unfinishedCount = unfinished.Count,
+                unfinishedTasks = unfinished.Select(t => new
+                {
+                    t.Id,
+                    t.Title,
+                    t.Status,
+                    AssigneeName = t.Assignee?.FullName
+                })
+            });
+        }
+
+        // ── All tasks done — proceed with closure ────────────────────────
+        sprint.Status   = "closed";
+        sprint.Velocity = sprint.Tasks.Sum(t => t.StoryPoints ?? 0);
+        await _db.SaveChangesAsync();
+
+        await _events.AppendAsync(sprint.ProjectId, "Sprint", "SprintClosed",
+            new { sprint.Id, sprint.Name, sprint.Velocity });
+        await _db.SaveChangesAsync();
+
+        return Ok(new
+        {
+            sprint.Id,
+            sprint.ProjectId,
+            sprint.Name,
+            sprint.Status,
+            sprint.Velocity
+        });
     }
 }
 
@@ -132,4 +267,10 @@ public record CreateSprintRequest(
     string? Goal,
     DateOnly? StartDate,
     DateOnly? EndDate
+);
+
+public record UpdateSprintDatesRequest(
+    DateOnly? StartDate,
+    DateOnly? EndDate,
+    bool? ClearEndDate = false
 );

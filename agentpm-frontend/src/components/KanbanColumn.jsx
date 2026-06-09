@@ -9,7 +9,7 @@ const columnMeta = {
   blocked:    { label: 'Bloqué',     color: 'border-red-300',   dot: 'bg-red-500'   },
 };
 
-export default function KanbanColumn({ status, tasks, onTaskClick, onAddTask }) {
+export default function KanbanColumn({ status, tasks, onTaskClick, onAddTask, onPriorityChanged }) {
   const meta = columnMeta[status] || { label: status, color: 'border-gray-300', dot: 'bg-gray-400' };
 
   const { setNodeRef, isOver } = useDroppable({ id: status });
@@ -45,7 +45,7 @@ export default function KanbanColumn({ status, tasks, onTaskClick, onAddTask }) 
           <p className="text-xs text-gray-400 text-center py-6 italic">Aucune tâche</p>
         )}
         {tasks.map(task => (
-          <TaskCard key={task.id} task={task} onClick={onTaskClick} />
+          <TaskCard key={task.id} task={task} onClick={onTaskClick} onPriorityChanged={onPriorityChanged} />
         ))}
       </div>
     </div>

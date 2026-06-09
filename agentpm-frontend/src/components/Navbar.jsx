@@ -3,11 +3,13 @@ import { Link, useLocation } from 'react-router-dom';
 import { useMsal } from '@azure/msal-react';
 import { graphRequest } from '../auth/authConfig';
 import { fetchAndStorePhoto } from '../utils/graphPhoto';
+import { useAuth } from '../auth/useAuth';
 
 export default function Navbar() {
   const { pathname }           = useLocation();
   const { instance, accounts } = useMsal();
   const account                = accounts[0];
+  const { logout }             = useAuth();
 
   const userName  = sessionStorage.getItem('userName')  || '';
   const userEmail = sessionStorage.getItem('userEmail') || '';
@@ -107,6 +109,19 @@ export default function Navbar() {
               {initials}
             </div>
           )}
+
+          {/* Logout button */}
+          <button
+            onClick={logout}
+            title="Se déconnecter"
+            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-red-600 hover:bg-red-50 border border-gray-200 hover:border-red-200 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            <span className="hidden sm:inline">Déconnexion</span>
+          </button>
         </div>
 
       </div>

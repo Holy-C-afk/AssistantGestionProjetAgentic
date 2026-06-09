@@ -15,12 +15,12 @@ public class ProjectCreatedNotificationHandler : INotificationHandler<ProjectCre
 
     public async Task Handle(ProjectCreatedNotification notification, CancellationToken ct)
     {
-        // Ajouter le owner comme premier membre avec le role owner
+        // Ajouter le owner comme Chef de projet (admin)
         await _repo.AddMemberAsync(new Domain.Entities.ProjectMember
         {
             ProjectId = notification.ProjectId,
             UserId = notification.OwnerId,
-            Role = "owner",
+            Role = "admin",
             JoinedAt = notification.OccurredAt
         }, ct);
     }

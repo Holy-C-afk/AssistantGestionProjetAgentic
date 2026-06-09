@@ -11,6 +11,7 @@ namespace AgentPM.Domain.Entities
         public string FullName { get; set; } = default!;
         public string PasswordHash { get; set; } = default!;
         public string Role { get; set; } = "member";
+        public string? PhotoUrl { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public ICollection<Project> OwnedProjects { get; set; } = [];

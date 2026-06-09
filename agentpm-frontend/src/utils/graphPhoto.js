@@ -1,5 +1,7 @@
-/** Fetches the Azure AD profile photo using a Graph token and stores it
- *  as a base64 data-URL in sessionStorage.
+import api from '../api/api';
+
+/** Fetches the Azure AD profile photo using a Graph token, stores it
+ *  in sessionStorage AND saves it to the backend so other users can see it.
  *  Returns true on success, false if the user has no photo set. */
 export async function fetchAndStorePhoto(graphToken) {
   const res = await fetch('https://graph.microsoft.com/v1.0/me/photo/$value', {
@@ -18,5 +20,13 @@ export async function fetchAndStorePhoto(graphToken) {
   sessionStorage.setItem('userPhoto', base64);
   sessionStorage.removeItem('photoConsentNeeded');
   window.dispatchEvent(new Event('userPhotoReady'));
+
+  // Save to backend so other users see the photo on task cards
+  try {
+    await api.patch('/auth/me/photo', { photoUrl: base64 });
+  } catch {
+    // Non-blocking — UI still works without persisted photo
+  }
+
   return true;
 }

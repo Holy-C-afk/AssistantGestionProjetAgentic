@@ -39,6 +39,17 @@ export default function ProjectDetailPage() {
   const [error, setError] = useState('');
   const [pdfLoading, setPdfLoading] = useState(false);
 
+  // isAdmin = true for Chef de projet:
+  //   • project owner (ownerId)
+  //   • member with role 'admin'  (new projects)
+  //   • member with role 'owner'  (legacy rows created before the fix)
+  const currentUserId = sessionStorage.getItem('userId');
+  const isOwner       = project?.ownerId === currentUserId;
+  const currentMember = members.find(m => m.userId === currentUserId);
+  const isAdmin       = isOwner
+    || currentMember?.role === 'admin'
+    || currentMember?.role === 'owner';
+
   useEffect(() => {
     getProjectById(id).then(p => {
       setProject(p);
@@ -185,25 +196,25 @@ export default function ProjectDetailPage() {
                 </p>
               </div>
 
-              {/* Actions */}
+              {/* Actions — chef de projet only */}
               <div className="flex items-center gap-2 flex-wrap shrink-0">
-                <button onClick={() => setEditing(true)}
+                {isAdmin && <button onClick={() => setEditing(true)}
                   className="text-sm px-3 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 transition">
                   ✏️ Modifier
-                </button>
-                {project.status !== 'archived' && (
+                </button>}
+                {isAdmin && project.status !== 'archived' && (
                   <button onClick={() => handleStatusChange('archived')}
                     className="text-sm px-3 py-2 rounded-lg border border-yellow-200 bg-yellow-50 text-yellow-700 hover:bg-yellow-100 transition">
                     📦 Archiver
                   </button>
                 )}
-                {project.status !== 'completed' && (
+                {isAdmin && project.status !== 'completed' && (
                   <button onClick={() => handleStatusChange('completed')}
                     className="text-sm px-3 py-2 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition">
                     ✅ Terminer
                   </button>
                 )}
-                {(project.status === 'archived' || project.status === 'completed') && (
+                {isAdmin && (project.status === 'archived' || project.status === 'completed') && (
                   <button onClick={() => handleStatusChange('active')}
                     className="text-sm px-3 py-2 rounded-lg border border-green-200 bg-green-50 text-green-700 hover:bg-green-100 transition">
                     ▶ Réactiver
@@ -246,6 +257,7 @@ export default function ProjectDetailPage() {
                 onSelect={setSelectedSprintId}
                 refreshKey={sprintRefreshKey}
                 onAutoRefresh={handleAutoRefresh}
+                isAdmin={isAdmin}
               />
             </div>
             <div className="lg:col-span-3">
@@ -255,16 +267,17 @@ export default function ProjectDetailPage() {
                 refreshKey={boardRefreshKey}
                 onTaskClick={(task) => setSelectedTaskId(task.id)}
                 onAutoRefresh={handleAutoRefresh}
+                isAdmin={isAdmin}
               />
             </div>
           </div>
         )}
 
         {tab === 'members' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className={`grid grid-cols-1 ${isAdmin ? 'lg:grid-cols-2' : ''} gap-6`}>
 
-            {/* ── Left: user picker ─────────────────────────────────────────── */}
-            <div className="bg-white rounded-xl shadow p-5">
+            {/* ── Left: user picker — admin only ────────────────────────────── */}
+            {isAdmin && <div className="bg-white rounded-xl shadow p-5">
               <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
                 👥 Ajouter un utilisateur
               </h3>
@@ -347,9 +360,8 @@ export default function ProjectDetailPage() {
                       onChange={e => setNewRole(e.target.value)}
                       className="flex-1 border border-indigo-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     >
-                      <option value="member">Membre</option>
-                      <option value="admin">Admin</option>
-                      <option value="viewer">Observateur</option>
+                      <option value="member">Collaborateur</option>
+                      <option value="admin">Chef de projet</option>
                     </select>
                     <button
                       onClick={handleAddMember}
@@ -367,7 +379,7 @@ export default function ProjectDetailPage() {
               <p className="text-xs text-gray-400 text-center">
                 Seuls les utilisateurs connectés au moins une fois à AgentPM apparaissent.
               </p>
-            </div>
+            </div>}
 
             {/* ── Right: current members ────────────────────────────────────── */}
             <div className="bg-white rounded-xl shadow p-5">
@@ -386,7 +398,15 @@ export default function ProjectDetailPage() {
                   const initials = m.fullName
                     ? m.fullName.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2)
                     : '?';
+                  // 'owner' (legacy) and 'admin' both display as "Chef de projet"
+                  const roleLabel = {
+                    owner:  'Chef de projet',
+                    admin:  'Chef de projet',
+                    member: 'Collaborateur',
+                    viewer: 'Observateur',
+                  }[m.role] ?? m.role;
                   const roleColor = {
+                    owner:  'bg-purple-100 text-purple-700',
                     admin:  'bg-purple-100 text-purple-700',
                     member: 'bg-indigo-100 text-indigo-700',
                     viewer: 'bg-gray-100 text-gray-600',
@@ -404,14 +424,16 @@ export default function ProjectDetailPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${roleColor}`}>{m.role}</span>
-                        <button
-                          onClick={() => handleRemoveMember(m.userId)}
-                          className="text-gray-400 hover:text-red-500 transition text-sm p-1 rounded hover:bg-red-50"
-                          title="Retirer du projet"
-                        >
-                          ✕
-                        </button>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${roleColor}`}>{roleLabel}</span>
+                        {isAdmin && (
+                          <button
+                            onClick={() => handleRemoveMember(m.userId)}
+                            className="text-gray-400 hover:text-red-500 transition text-sm p-1 rounded hover:bg-red-50"
+                            title="Retirer du projet"
+                          >
+                            ✕
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -426,6 +448,7 @@ export default function ProjectDetailPage() {
           <TaskDetailModal
             taskId={selectedTaskId}
             members={members}
+            isAdmin={isAdmin}
             onClose={() => setSelectedTaskId(null)}
             onUpdated={refreshBoard}
             onAutoRefresh={handleAutoRefresh}

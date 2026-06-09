@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
-import { getTask, updateTask, deleteTask, getTaskComments, addTaskComment, deleteTaskComment, createTask } from '../api/taskApi';
+import { getTask, updateTask, deleteTask, getTaskComments, addTaskComment, deleteTaskComment, createTask, exportTaskPdf } from '../api/taskApi';
 import { agentEstimate, agentDecompose } from '../api/agentApi';
+import { sendMailViaGraph } from '../api/emailApi';
+import { buildAssignmentEmail } from '../utils/emailTemplates';
 
-export default function TaskDetailModal({ taskId, members = [], onClose, onUpdated, onAutoRefresh }) {
+export default function TaskDetailModal({ taskId, members = [], isAdmin = true, onClose, onUpdated, onAutoRefresh }) {
   const [task, setTask]         = useState(null);
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [form, setForm]         = useState(null);
-  const [saving, setSaving]     = useState(false);
-  const [loading, setLoading]   = useState(true);
+  const [saving, setSaving]       = useState(false);
+  const [loading, setLoading]     = useState(true);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   // AI state
   const [estimating, setEstimating]   = useState(false);
@@ -16,6 +19,8 @@ export default function TaskDetailModal({ taskId, members = [], onClose, onUpdat
   const [subTasks, setSubTasks]       = useState(null);
   const [creatingIdx, setCreatingIdx] = useState(new Set());
   const [createdIdx, setCreatedIdx]   = useState(new Set());
+
+  const [tagInput, setTagInput] = useState('');
 
   useEffect(() => {
     if (!taskId) return;
@@ -32,6 +37,7 @@ export default function TaskDetailModal({ taskId, members = [], onClose, onUpdat
           priority: t.priority,
           storyPoints: t.storyPoints ?? '',
           assigneeId: t.assigneeId || '',
+          tags: t.tags ?? [],
         });
         setComments(c);
       })
@@ -42,15 +48,30 @@ export default function TaskDetailModal({ taskId, members = [], onClose, onUpdat
   const handleSave = async () => {
     setSaving(true);
     try {
-      const updated = await updateTask(taskId, {
-        title: form.title,
+      const result = await updateTask(taskId, {
+        title:       form.title,
         description: form.description,
-        priority: form.priority,
+        priority:    form.priority,
         storyPoints: form.storyPoints === '' ? null : parseInt(form.storyPoints, 10),
-        assigneeId: form.assigneeId || null,
+        assigneeId:  form.assigneeId || null,
+        tags:        form.tags ?? [],
       });
+
+      // Backend may return { task, emailNotification }
+      const updated  = result?.task ?? result;
+      const emailInfo = result?.emailNotification;
       setTask(updated);
       onUpdated?.();
+
+      // Send assignment email via Graph API (no password needed — uses MSAL token)
+      if (emailInfo?.to) {
+        const { to, assigneeName, taskTitle, taskDesc, taskPrio,
+                projectName, sprintName, assignerName } = emailInfo;
+        const subject = `📋 Nouvelle tâche assignée : ${taskTitle}`;
+        const html    = buildAssignmentEmail(assigneeName, taskTitle, taskDesc,
+                                             taskPrio, projectName, sprintName, assignerName);
+        sendMailViaGraph(to, subject, html); // fire-and-forget
+      }
     } catch (e) { console.error(e); }
     finally { setSaving(false); }
   };
@@ -148,23 +169,34 @@ export default function TaskDetailModal({ taskId, members = [], onClose, onUpdat
 
             {/* Form */}
             <div className="p-6 space-y-5">
+              {/* Role badge for collaborateurs */}
+              {!isAdmin && (
+                <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 text-xs px-3 py-2 rounded-lg">
+                  <span>👁️</span>
+                  <span>Mode lecture — seuls les chefs de projet peuvent modifier les tâches.</span>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Titre</label>
-                <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <input value={form.title} onChange={e => isAdmin && setForm({ ...form, title: e.target.value })}
+                  readOnly={!isAdmin}
+                  className={`w-full border rounded-lg px-3 py-2 text-lg font-semibold focus:outline-none ${isAdmin ? 'border-gray-300 focus:ring-2 focus:ring-indigo-500' : 'border-gray-200 bg-gray-50 text-gray-600 cursor-default'}`} />
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Description</label>
-                <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
-                  rows={4} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <textarea value={form.description} onChange={e => isAdmin && setForm({ ...form, description: e.target.value })}
+                  readOnly={!isAdmin}
+                  rows={4} className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none ${isAdmin ? 'border-gray-300 focus:ring-2 focus:ring-indigo-500' : 'border-gray-200 bg-gray-50 text-gray-600 cursor-default'}`} />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Priorité</label>
                   <select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                    disabled={!isAdmin}
+                    className={`w-full border rounded-lg px-3 py-2 text-sm ${!isAdmin ? 'bg-gray-50 text-gray-600 cursor-default border-gray-200' : 'border-gray-300'}`}>
                     <option value="low">Basse</option>
                     <option value="medium">Moyenne</option>
                     <option value="high">Haute</option>
@@ -177,14 +209,17 @@ export default function TaskDetailModal({ taskId, members = [], onClose, onUpdat
                   <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Story Points</label>
                   <div className="flex gap-2">
                     <input type="number" min="0" max="100" value={form.storyPoints}
-                      onChange={e => setForm({ ...form, storyPoints: e.target.value })}
-                      className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm" />
-                    <button type="button" onClick={handleEstimate} disabled={estimating} title="Estimation IA"
-                      className="bg-indigo-50 text-indigo-600 border border-indigo-200 px-2.5 rounded-lg text-sm hover:bg-indigo-100 disabled:opacity-50 transition whitespace-nowrap">
-                      {estimating
-                        ? <span className="inline-block w-4 h-4 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin" />
-                        : '🤖 Estimer'}
-                    </button>
+                      onChange={e => isAdmin && setForm({ ...form, storyPoints: e.target.value })}
+                      readOnly={!isAdmin}
+                      className={`flex-1 border rounded-lg px-3 py-2 text-sm ${!isAdmin ? 'bg-gray-50 text-gray-600 cursor-default border-gray-200' : 'border-gray-300'}`} />
+                    {isAdmin && (
+                      <button type="button" onClick={handleEstimate} disabled={estimating} title="Estimation IA"
+                        className="bg-indigo-50 text-indigo-600 border border-indigo-200 px-2.5 rounded-lg text-sm hover:bg-indigo-100 disabled:opacity-50 transition whitespace-nowrap">
+                        {estimating
+                          ? <span className="inline-block w-4 h-4 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin" />
+                          : '🤖 Estimer'}
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -197,51 +232,140 @@ export default function TaskDetailModal({ taskId, members = [], onClose, onUpdat
 
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Assigné à</label>
-                {members.length > 0 ? (
-                  <select
-                    value={form.assigneeId}
-                    onChange={e => setForm({ ...form, assigneeId: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  >
-                    <option value="">— Non assigné —</option>
-                    {members.map(m => (
-                      <option key={m.userId} value={m.userId}>
-                        {m.fullName} ({m.email})
-                      </option>
-                    ))}
-                  </select>
+                {isAdmin ? (
+                  members.length > 0 ? (
+                    <select
+                      value={form.assigneeId}
+                      onChange={e => setForm({ ...form, assigneeId: e.target.value })}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="">— Non assigné —</option>
+                      {members.map(m => (
+                        <option key={m.userId} value={m.userId}>
+                          {m.fullName} ({m.email})
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      value={form.assigneeId}
+                      onChange={e => setForm({ ...form, assigneeId: e.target.value })}
+                      placeholder="UUID utilisateur"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  )
                 ) : (
-                  <input
-                    value={form.assigneeId}
-                    onChange={e => setForm({ ...form, assigneeId: e.target.value })}
-                    placeholder="UUID utilisateur"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
+                  <input value={task.assigneeName || '— Non assigné —'} readOnly
+                    className="w-full border border-gray-200 bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-600 cursor-default" />
                 )}
-                {task.assigneeName && !members.length && (
-                  <p className="text-xs text-gray-500 mt-1">Actuel : {task.assigneeName}</p>
+              </div>
+
+              {/* ── Tags ── */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Tags</label>
+
+                {/* Existing tags */}
+                {form?.tags?.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {form.tags.map((tag, i) => {
+                      const palette = [
+                        'bg-violet-100 text-violet-700 border-violet-200',
+                        'bg-teal-100 text-teal-700 border-teal-200',
+                        'bg-pink-100 text-pink-700 border-pink-200',
+                        'bg-amber-100 text-amber-700 border-amber-200',
+                        'bg-cyan-100 text-cyan-700 border-cyan-200',
+                        'bg-lime-100 text-lime-700 border-lime-200',
+                      ];
+                      return (
+                        <span key={i} className={`inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full border font-medium ${palette[i % palette.length]}`}>
+                          {tag}
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => setForm(f => ({ ...f, tags: f.tags.filter((_, j) => j !== i) }))}
+                              className="hover:opacity-70 leading-none"
+                            >×</button>
+                          )}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Add tag input — admins only */}
+                {isAdmin && (
+                  <>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Ajouter un tag..."
+                        value={tagInput}
+                        onChange={e => setTagInput(e.target.value)}
+                        onKeyDown={e => {
+                          if ((e.key === 'Enter' || e.key === ',') && tagInput.trim()) {
+                            e.preventDefault();
+                            const newTag = tagInput.trim().replace(/,$/, '');
+                            if (newTag && !form.tags.includes(newTag)) {
+                              setForm(f => ({ ...f, tags: [...f.tags, newTag] }));
+                            }
+                            setTagInput('');
+                          }
+                        }}
+                        className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newTag = tagInput.trim();
+                          if (newTag && !form.tags.includes(newTag)) {
+                            setForm(f => ({ ...f, tags: [...f.tags, newTag] }));
+                          }
+                          setTagInput('');
+                        }}
+                        className="bg-gray-100 text-gray-700 px-3 py-2 rounded-lg text-sm hover:bg-gray-200 border border-gray-300"
+                      >
+                        + Ajouter
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">Appuyez sur Entrée ou virgule pour ajouter</p>
+                  </>
+                )}
+                {!isAdmin && form?.tags?.length === 0 && (
+                  <p className="text-xs text-gray-400 italic">Aucun tag.</p>
                 )}
               </div>
 
               <div className="flex gap-3 pt-2 flex-wrap">
-                <button onClick={handleSave} disabled={saving}
-                  className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-indigo-700 disabled:opacity-50">
-                  {saving ? 'Enregistrement...' : 'Enregistrer'}
+                {isAdmin && (
+                  <button onClick={handleSave} disabled={saving}
+                    className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-indigo-700 disabled:opacity-50">
+                    {saving ? 'Enregistrement...' : 'Enregistrer'}
+                  </button>
+                )}
+                {isAdmin && (
+                  <button onClick={handleDecompose} disabled={decomposing}
+                    className="bg-purple-50 text-purple-700 border border-purple-200 px-4 py-2 rounded-lg text-sm hover:bg-purple-100 disabled:opacity-50 flex items-center gap-2 transition">
+                    {decomposing
+                      ? <><span className="inline-block w-4 h-4 border-2 border-purple-300 border-t-purple-700 rounded-full animate-spin" />Décomposition...</>
+                      : '🤖 Décomposer en sous-tâches'}
+                  </button>
+                )}
+                <button
+                  onClick={async () => { setPdfLoading(true); try { await exportTaskPdf(taskId, form.title); } finally { setPdfLoading(false); } }}
+                  disabled={pdfLoading}
+                  className="bg-gray-50 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-100 border border-gray-200 flex items-center gap-1.5 disabled:opacity-50">
+                  {pdfLoading ? <span className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin inline-block" /> : '📄'} PDF
                 </button>
-                <button onClick={handleDecompose} disabled={decomposing}
-                  className="bg-purple-50 text-purple-700 border border-purple-200 px-4 py-2 rounded-lg text-sm hover:bg-purple-100 disabled:opacity-50 flex items-center gap-2 transition">
-                  {decomposing
-                    ? <><span className="inline-block w-4 h-4 border-2 border-purple-300 border-t-purple-700 rounded-full animate-spin" />Décomposition...</>
-                    : '🤖 Décomposer en sous-tâches'}
-                </button>
-                <button onClick={handleDelete}
-                  className="bg-red-50 text-red-600 px-4 py-2 rounded-lg text-sm hover:bg-red-100 border border-red-200">
-                  Supprimer
-                </button>
+                {isAdmin && (
+                  <button onClick={handleDelete}
+                    className="bg-red-50 text-red-600 px-4 py-2 rounded-lg text-sm hover:bg-red-100 border border-red-200">
+                    Supprimer
+                  </button>
+                )}
               </div>
 
-              {/* AI sub-tasks panel */}
-              {subTasks !== null && (
+              {/* AI sub-tasks panel — admin only */}
+              {isAdmin && subTasks !== null && (
                 <div className="mt-2 border border-purple-100 rounded-xl bg-purple-50/50 p-4">
                   <div className="flex items-center justify-between mb-3">
                     <h4 className="text-sm font-semibold text-purple-800 flex items-center gap-2">

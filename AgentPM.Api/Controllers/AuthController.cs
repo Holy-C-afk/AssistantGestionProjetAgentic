@@ -57,4 +57,22 @@ public class AuthController : ControllerBase
 
         return Ok(new { user.Id, user.Email, user.FullName, user.Role });
     }
+
+    // PATCH /api/auth/me/photo  — saves the Azure AD profile photo for the current user
+    [HttpPatch("me/photo")]
+    public async Task<IActionResult> SavePhoto([FromBody] SavePhotoRequest request)
+    {
+        Request.Headers.TryGetValue("X-User-Id", out var userIdHeader);
+        if (!Guid.TryParse(userIdHeader, out var userId))
+            return BadRequest("X-User-Id header missing.");
+
+        var user = await _db.Users.FindAsync(userId);
+        if (user is null) return NotFound();
+
+        user.PhotoUrl = request.PhotoUrl;
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
 }
+
+public record SavePhotoRequest(string PhotoUrl);

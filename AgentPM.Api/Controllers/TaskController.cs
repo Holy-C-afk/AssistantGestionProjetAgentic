@@ -4,6 +4,9 @@ using AgentPM.Domain.Entities;
 using AgentPM.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using QuestPDF.Fluent;
+using QuestPDF.Helpers;
+using QuestPDF.Infrastructure;
 
 namespace AgentPM.Api.Controllers;
 
@@ -11,13 +14,36 @@ namespace AgentPM.Api.Controllers;
 [Route("api/tasks")]
 public class TaskController : ControllerBase
 {
-    private readonly AppDbContext _db;
-    private readonly EventLogger _events;
+    private readonly AppDbContext        _db;
+    private readonly EventLogger         _events;
+    private readonly IEmailService       _email;
+    private readonly IServiceScopeFactory _scopeFactory;
 
-    public TaskController(AppDbContext db, EventLogger events)
+    public TaskController(AppDbContext db, EventLogger events,
+                          IEmailService email, IServiceScopeFactory scopeFactory)
     {
-        _db = db;
-        _events = events;
+        _db           = db;
+        _events       = events;
+        _email        = email;
+        _scopeFactory = scopeFactory;
+    }
+
+    private Guid CurrentUserId
+    {
+        get
+        {
+            if (Request.Headers.TryGetValue("X-User-Id", out var v) && Guid.TryParse(v, out var id))
+                return id;
+            return Guid.Empty;
+        }
+    }
+
+    private async Task<string> GetProjectRoleAsync(Guid projectId, Guid userId)
+    {
+        var member = await _db.ProjectMembers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(m => m.ProjectId == projectId && m.UserId == userId);
+        return member?.Role ?? "member";
     }
 
     private async Task<Guid> GetSystemUserIdAsync()
@@ -53,6 +79,14 @@ public class TaskController : ControllerBase
         if (!string.IsNullOrWhiteSpace(status)) query = query.Where(t => t.Status == status);
         if (assigneeId.HasValue) query = query.Where(t => t.AssigneeId == assigneeId.Value);
 
+        // Role-based filtering: collaborateurs only see their own tasks
+        if (projectId.HasValue && CurrentUserId != Guid.Empty)
+        {
+            var role = await GetProjectRoleAsync(projectId.Value, CurrentUserId);
+            if (role == "member")
+                query = query.Where(t => t.AssigneeId == CurrentUserId);
+        }
+
         var tasks = await query
             .OrderBy(t => t.Order)
             .ThenByDescending(t => t.CreatedAt)
@@ -61,7 +95,7 @@ public class TaskController : ControllerBase
                 t.Status, t.Priority, t.StoryPoints,
                 t.AssigneeId, t.Assignee != null ? t.Assignee.FullName : null,
                 t.CreatedById, t.Order, t.CreatedAt, t.UpdatedAt,
-                t.Comments.Count))
+                t.Comments.Count, t.Tags, t.Assignee != null ? t.Assignee.PhotoUrl : null))
             .ToListAsync();
 
         return Ok(tasks);
@@ -82,7 +116,7 @@ public class TaskController : ControllerBase
             t.Id, t.ProjectId, t.SprintId, t.Title, t.Description,
             t.Status, t.Priority, t.StoryPoints,
             t.AssigneeId, t.Assignee?.FullName,
-            t.CreatedById, t.Order, t.CreatedAt, t.UpdatedAt, commentCount));
+            t.CreatedById, t.Order, t.CreatedAt, t.UpdatedAt, commentCount, t.Tags, t.Assignee?.PhotoUrl));
     }
 
     // S3-4: CreateTask
@@ -109,7 +143,8 @@ public class TaskController : ControllerBase
             AssigneeId = request.AssigneeId,
             CreatedById = creatorId,
             Order = maxOrder + 1,
-            Status = "todo"
+            Status = "todo",
+            Tags = request.Tags ?? []
         };
 
         _db.Tasks.Add(task);
@@ -156,7 +191,9 @@ public class TaskController : ControllerBase
         var task = await _db.Tasks.FindAsync(id);
         if (task is null) return NotFound();
 
-        var assigneeChanged = request.AssigneeId.HasValue && request.AssigneeId != task.AssigneeId;
+        var previousAssigneeId = task.AssigneeId;
+        var assigneeChanged    = request.AssigneeId.HasValue && request.AssigneeId != task.AssigneeId;
+        object? emailNotification = null;
 
         if (!string.IsNullOrWhiteSpace(request.Title)) task.Title = request.Title;
         if (request.Description is not null) task.Description = request.Description;
@@ -164,6 +201,7 @@ public class TaskController : ControllerBase
         if (request.StoryPoints.HasValue) task.StoryPoints = request.StoryPoints.Value;
         if (request.AssigneeId.HasValue) task.AssigneeId = request.AssigneeId.Value;
         if (request.SprintId.HasValue) task.SprintId = request.SprintId.Value;
+        if (request.Tags is not null) task.Tags = request.Tags;
 
         task.UpdatedAt = DateTime.UtcNow;
 
@@ -171,6 +209,27 @@ public class TaskController : ControllerBase
         {
             await _events.AppendAsync(task.Id, "Task", "TaskAssigned",
                 new { task.Id, task.AssigneeId });
+
+            // Collect email data — frontend will send via Graph API (no password needed)
+            var assigneeUser  = await _db.Users.FindAsync(request.AssigneeId!.Value);
+            var assignerUser  = await _db.Users.FindAsync(CurrentUserId);
+            var projectEntity = await _db.Projects.FindAsync(task.ProjectId);
+            var sprintEntity  = task.SprintId.HasValue ? await _db.Sprints.FindAsync(task.SprintId.Value) : null;
+
+            if (assigneeUser is not null)
+            {
+                emailNotification = new
+                {
+                    to          = assigneeUser.Email,
+                    assigneeName = assigneeUser.FullName,
+                    taskTitle   = task.Title,
+                    taskDesc    = task.Description,
+                    taskPrio    = task.Priority,
+                    projectName = projectEntity?.Name ?? "—",
+                    sprintName  = sprintEntity?.Name  ?? "Backlog",
+                    assignerName = assignerUser?.FullName ?? "Un chef de projet",
+                };
+            }
         }
 
         await _events.AppendAsync(task.Id, "Task", "TaskUpdated", new
@@ -183,7 +242,8 @@ public class TaskController : ControllerBase
 
         await _db.SaveChangesAsync();
 
-        return Ok(await ToDto(task.Id));
+        var dto = await ToDto(task.Id);
+        return Ok(new { task = dto, emailNotification });
     }
 
     // S3-4: MoveTask
@@ -412,6 +472,133 @@ public class TaskController : ControllerBase
         return NoContent();
     }
 
+    // GET /api/tasks/{id}/pdf
+    [HttpGet("{id:guid}/pdf")]
+    public async Task<IActionResult> ExportPdf(Guid id)
+    {
+        var t = await _db.Tasks.AsNoTracking()
+            .Include(x => x.Assignee)
+            .Include(x => x.Sprint)
+            .Include(x => x.CreatedBy)
+            .Include(x => x.Comments).ThenInclude(c => c.Author)
+            .FirstOrDefaultAsync(x => x.Id == id);
+        if (t is null) return NotFound();
+
+        QuestPDF.Settings.License = LicenseType.Community;
+
+        static string PrioLabel(string p) => p switch
+        {
+            "critical" => "Critique", "high" => "Haute",
+            "medium"   => "Moyenne",  "low"  => "Faible", _ => p
+        };
+        static string StatusLabel(string s) => s switch
+        {
+            "todo"        => "À faire",    "in_progress" => "En cours",
+            "done"        => "Terminé",    "blocked"     => "Bloqué",
+            "clarifier"   => "À clarifier", _ => s
+        };
+        static string PrioColor(string p) => p switch
+        {
+            "critical" => "#ef4444", "high" => "#f97316",
+            "medium"   => "#3b82f6", _      => "#6b7280"
+        };
+
+        var pdf = Document.Create(doc =>
+        {
+            doc.Page(page =>
+            {
+                page.Size(PageSizes.A4);
+                page.Margin(40);
+                page.DefaultTextStyle(x => x.FontSize(11).FontColor("#374151"));
+
+                // ── Header
+                page.Header().BorderBottom(2).BorderColor("#6366f1").PaddingBottom(10).Column(col =>
+                {
+                    col.Item().Text(t.Title).FontSize(20).Bold().FontColor("#1e1b4b");
+                    col.Item().Text($"Tâche  •  Créée le {t.CreatedAt:dd/MM/yyyy}")
+                        .FontSize(9).FontColor("#9ca3af");
+                });
+
+                page.Content().PaddingTop(18).Column(col =>
+                {
+                    // ── Meta table
+                    col.Item().PaddingBottom(14).Table(tbl =>
+                    {
+                        tbl.ColumnsDefinition(c => { c.ConstantColumn(130); c.RelativeColumn(); });
+                        void Row(string label, string val, string? color = null)
+                        {
+                            tbl.Cell().Background("#f9fafb").Padding(5).Text(label).Bold().FontSize(10);
+                            var cell = tbl.Cell().Padding(5);
+                            if (color is not null)
+                                cell.Text(val).FontColor(color).Bold();
+                            else
+                                cell.Text(val);
+                        }
+                        Row("Statut",    StatusLabel(t.Status));
+                        Row("Priorité",  PrioLabel(t.Priority), PrioColor(t.Priority));
+                        Row("Assigné à", t.Assignee?.FullName ?? "—");
+                        Row("Sprint",    t.Sprint?.Name ?? "Backlog");
+                        Row("Créé par",  t.CreatedBy?.FullName ?? "—");
+                        Row("Créé le",   t.CreatedAt.ToString("dd/MM/yyyy HH:mm"));
+                        Row("Modifié le",t.UpdatedAt.ToString("dd/MM/yyyy HH:mm"));
+                        if (t.StoryPoints.HasValue)
+                            Row("Story Points", t.StoryPoints.Value.ToString());
+                    });
+
+                    // ── Description
+                    if (!string.IsNullOrWhiteSpace(t.Description))
+                    {
+                        col.Item().Text("Description").Bold().FontSize(12).FontColor("#4f46e5");
+                        col.Item().PaddingTop(4).PaddingBottom(14)
+                            .Background("#f8fafc").Padding(10)
+                            .Text(t.Description).FontColor("#374151");
+                    }
+
+                    // ── Tags
+                    if (t.Tags.Any())
+                    {
+                        col.Item().Text("Tags").Bold().FontSize(12).FontColor("#4f46e5");
+                        col.Item().PaddingTop(4).PaddingBottom(14)
+                            .Text(string.Join("  ·  ", t.Tags)).FontColor("#7c3aed");
+                    }
+
+                    // ── Comments
+                    if (t.Comments.Any())
+                    {
+                        col.Item().Text($"Commentaires ({t.Comments.Count})")
+                            .Bold().FontSize(12).FontColor("#4f46e5");
+                        col.Item().PaddingTop(4).Column(cc =>
+                        {
+                            foreach (var c in t.Comments.OrderBy(x => x.CreatedAt))
+                            {
+                                cc.Item().PaddingBottom(6).Background("#f9fafb").Padding(8).Column(inner =>
+                                {
+                                    inner.Item().Row(r =>
+                                    {
+                                        r.RelativeItem().Text(c.Author?.FullName ?? "?")
+                                            .Bold().FontSize(10).FontColor("#1e1b4b");
+                                        r.AutoItem().Text(c.CreatedAt.ToString("dd/MM/yyyy HH:mm"))
+                                            .FontSize(9).FontColor("#9ca3af");
+                                    });
+                                    inner.Item().PaddingTop(3).Text(c.Content).FontSize(10);
+                                });
+                            }
+                        });
+                    }
+                });
+
+                page.Footer().AlignCenter().Text(x =>
+                {
+                    x.Span("AgentPM  •  ").FontColor("#9ca3af");
+                    x.Span(DateTime.Now.ToString("dd/MM/yyyy HH:mm")).FontColor("#9ca3af");
+                });
+            });
+        }).GeneratePdf();
+
+        var fileName = t.Title.Length > 40 ? t.Title[..40] : t.Title;
+        return File(pdf, "application/pdf", $"tache-{fileName}.pdf");
+    }
+
     private async Task<TaskDto> ToDto(Guid id)
     {
         var t = await _db.Tasks.AsNoTracking()
@@ -424,6 +611,6 @@ public class TaskController : ControllerBase
             t.Id, t.ProjectId, t.SprintId, t.Title, t.Description,
             t.Status, t.Priority, t.StoryPoints,
             t.AssigneeId, t.Assignee?.FullName,
-            t.CreatedById, t.Order, t.CreatedAt, t.UpdatedAt, commentCount);
+            t.CreatedById, t.Order, t.CreatedAt, t.UpdatedAt, commentCount, t.Tags, t.Assignee?.PhotoUrl);
     }
 }
