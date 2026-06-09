@@ -23,10 +23,10 @@ export default function Navbar() {
   useEffect(() => {
     const onReady   = () => setUserPhoto(sessionStorage.getItem('userPhoto'));
     const onConsent = () => { if (!sessionStorage.getItem('userPhoto')) setNeedsConsent(true); };
-    window.addEventListener('userPhotoReady',    onReady);
+    window.addEventListener('userPhotoReady',     onReady);
     window.addEventListener('photoConsentNeeded', onConsent);
     return () => {
-      window.removeEventListener('userPhotoReady',    onReady);
+      window.removeEventListener('userPhotoReady',     onReady);
       window.removeEventListener('photoConsentNeeded', onConsent);
     };
   }, []);
@@ -47,19 +47,30 @@ export default function Navbar() {
     ? userName.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2)
     : userEmail[0]?.toUpperCase() || '?';
 
+  const firstName = userName.split(' ')[0];
+
   return (
-    <nav className="bg-white/95 backdrop-blur-md border-b border-gray-200/80 sticky top-0 z-40">
-      <div className="max-w-6xl mx-auto px-6 flex items-center h-14 gap-6">
+    <nav style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}
+      className="sticky top-0 z-40 backdrop-blur-sm bg-white/95">
+      <div className="max-w-7xl mx-auto px-6 flex items-center h-14 gap-6">
 
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2.5 shrink-0 group">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-sm">
-            <span className="text-white text-xs font-bold">A</span>
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+            style={{ background: 'var(--accent)' }}>
+            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+            </svg>
           </div>
-          <span className="font-bold text-gray-900 text-[15px] tracking-tight group-hover:text-indigo-700 transition-colors">
+          <span className="font-bold text-[15px] tracking-tight transition-colors group-hover:opacity-70"
+            style={{ color: 'var(--text-1)' }}>
             AgentPM
           </span>
         </Link>
+
+        {/* Divider */}
+        <div className="h-5 w-px" style={{ background: 'var(--border)' }} />
 
         {/* Nav links */}
         <div className="flex gap-0.5">
@@ -69,21 +80,16 @@ export default function Navbar() {
         {/* Right side */}
         <div className="ml-auto flex items-center gap-3">
 
-          {/* Name */}
-          {userName && (
-            <span className="text-sm text-gray-500 hidden sm:block truncate max-w-44 select-none">{userName}</span>
-          )}
-
           {/* Connect photo button (one-time) */}
           {needsConsent && !userPhoto && (
             <button
               onClick={handleConnectPhoto}
               disabled={connecting}
-              title="Afficher ma photo de profil Azure"
-              className="hidden sm:flex items-center gap-1.5 text-xs text-indigo-600 bg-indigo-50 border border-indigo-200 px-2.5 py-1.5 rounded-lg hover:bg-indigo-100 transition disabled:opacity-50"
+              className="hidden sm:flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-50"
+              style={{ color: 'var(--accent)', borderColor: 'var(--accent)', background: 'var(--accent-light)' }}
             >
               {connecting
-                ? <span className="w-3.5 h-3.5 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin" />
+                ? <span className="w-3.5 h-3.5 border-2 border-t-current rounded-full animate-spin" style={{ borderColor: 'var(--accent)' }} />
                 : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                       d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -93,28 +99,53 @@ export default function Navbar() {
             </button>
           )}
 
-          {/* Avatar */}
-          {userPhoto ? (
-            <img
-              src={userPhoto}
-              alt={userName || userEmail}
-              title={userEmail}
-              className="w-8 h-8 rounded-full object-cover ring-2 ring-indigo-100 shadow-sm cursor-default select-none"
-            />
-          ) : (
-            <div
-              title={userEmail}
-              className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white text-xs font-bold flex items-center justify-center cursor-default select-none shadow-sm"
-            >
-              {initials}
-            </div>
-          )}
+          {/* User info */}
+          <div className="hidden sm:flex items-center gap-2">
+            {userPhoto ? (
+              <img
+                src={userPhoto}
+                alt={userName || userEmail}
+                title={userEmail}
+                className="w-8 h-8 rounded-full object-cover ring-2 select-none"
+                style={{ ringColor: 'var(--border)' }}
+              />
+            ) : (
+              <div
+                title={userEmail}
+                className="w-8 h-8 rounded-full text-white text-xs font-bold flex items-center justify-center cursor-default select-none"
+                style={{ background: 'var(--accent)' }}
+              >
+                {initials}
+              </div>
+            )}
+            {firstName && (
+              <span className="text-sm hidden md:block truncate max-w-36 select-none"
+                style={{ color: 'var(--text-2)' }}>
+                {firstName}
+              </span>
+            )}
+          </div>
 
-          {/* Logout button */}
+          {/* Logout */}
           <button
             onClick={logout}
             title="Se déconnecter"
-            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-red-600 hover:bg-red-50 border border-gray-200 hover:border-red-200 px-3 py-1.5 rounded-lg transition-colors"
+            className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border transition-colors"
+            style={{
+              color: 'var(--text-2)',
+              borderColor: 'var(--border)',
+              background: 'transparent',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.color = 'var(--danger)';
+              e.currentTarget.style.borderColor = '#FECACA';
+              e.currentTarget.style.background = 'var(--danger-bg)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.color = 'var(--text-2)';
+              e.currentTarget.style.borderColor = 'var(--border)';
+              e.currentTarget.style.background = 'transparent';
+            }}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -123,7 +154,6 @@ export default function Navbar() {
             <span className="hidden sm:inline">Déconnexion</span>
           </button>
         </div>
-
       </div>
     </nav>
   );
@@ -133,9 +163,11 @@ function NavLink({ to, active, children }) {
   return (
     <Link
       to={to}
-      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-        active ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-      }`}
+      className="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+      style={{
+        color:      active ? 'var(--accent)' : 'var(--text-2)',
+        background: active ? 'var(--accent-light)' : 'transparent',
+      }}
     >
       {children}
     </Link>

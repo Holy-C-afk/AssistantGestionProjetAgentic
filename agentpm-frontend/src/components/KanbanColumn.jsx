@@ -1,51 +1,73 @@
 import { useDroppable } from '@dnd-kit/core';
 import TaskCard from './TaskCard';
 
-const columnMeta = {
-  todo:       { label: 'À faire',    color: 'border-gray-300',  dot: 'bg-gray-400'  },
-  clarifier:  { label: 'À clarifier', color: 'border-amber-300', dot: 'bg-amber-400' },
-  in_progress:{ label: 'En cours',   color: 'border-blue-300',  dot: 'bg-blue-500'  },
-  done:       { label: 'Terminé',    color: 'border-green-300', dot: 'bg-green-500' },
-  blocked:    { label: 'Bloqué',     color: 'border-red-300',   dot: 'bg-red-500'   },
+const COLUMN_META = {
+  todo:        { label: 'À faire',     accent: '#94A3B8', dot: '#94A3B8' },
+  clarifier:   { label: 'À clarifier', accent: '#F59E0B', dot: '#F59E0B' },
+  in_progress: { label: 'En cours',    accent: '#0E7490', dot: '#0E7490' },
+  done:        { label: 'Terminé',     accent: '#15803D', dot: '#15803D' },
+  blocked:     { label: 'Bloqué',      accent: '#DC2626', dot: '#DC2626' },
 };
 
 export default function KanbanColumn({ status, tasks, onTaskClick, onAddTask, onPriorityChanged, isAdmin = true }) {
-  const meta = columnMeta[status] || { label: status, color: 'border-gray-300', dot: 'bg-gray-400' };
-
+  const meta = COLUMN_META[status] || { label: status, accent: '#94A3B8', dot: '#94A3B8' };
   const { setNodeRef, isOver } = useDroppable({ id: status });
 
   return (
     <div
       ref={setNodeRef}
-      className={`flex-1 min-w-[260px] bg-gray-50 rounded-xl border-2 border-dashed transition-colors ${
-        isOver ? 'border-indigo-400 bg-indigo-50' : meta.color
-      }`}
+      className="flex-1 flex flex-col rounded-2xl transition-all duration-150"
+      style={{
+        minWidth: '260px',
+        background: isOver ? 'color-mix(in srgb, var(--accent) 5%, var(--surface-2))' : 'var(--surface-2)',
+        border: `1.5px solid ${isOver ? 'var(--accent)' : 'var(--border)'}`,
+      }}
     >
-      <div className="flex items-center justify-between p-3 border-b border-gray-200 bg-white rounded-t-xl sticky top-0 z-10">
-        <div className="flex items-center gap-2">
-          <span className={`w-2.5 h-2.5 rounded-full ${meta.dot}`} />
-          <h3 className="font-semibold text-gray-700 text-sm">{meta.label}</h3>
-          <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+      {/* Column header */}
+      <div className="flex items-center justify-between px-4 py-3"
+        style={{ borderBottom: '1px solid var(--border)' }}>
+        <div className="flex items-center gap-2.5">
+          {/* Colored dot */}
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: meta.dot }} />
+          <h3 className="font-semibold text-sm" style={{ color: 'var(--text-1)' }}>
+            {meta.label}
+          </h3>
+          {/* Task count pill */}
+          <span className="text-xs px-2 py-0.5 rounded-full font-medium tabular-nums"
+            style={{ background: 'var(--border)', color: 'var(--text-2)' }}>
             {tasks.length}
           </span>
         </div>
+
         {onAddTask && status === 'todo' && (
           <button
             onClick={onAddTask}
-            className="text-indigo-600 hover:bg-indigo-50 rounded p-1 text-lg leading-none font-bold"
+            className="w-6 h-6 rounded-lg flex items-center justify-center text-lg leading-none font-bold transition-colors"
+            style={{ color: 'var(--accent)', background: 'transparent' }}
             title="Ajouter une tâche"
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--accent-light)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
           >
             +
           </button>
         )}
       </div>
 
-      <div className="p-3 min-h-[200px]">
+      {/* Task list */}
+      <div className="flex-1 p-3 min-h-[200px] overflow-y-auto">
         {tasks.length === 0 && (
-          <p className="text-xs text-gray-400 text-center py-6 italic">Aucune tâche</p>
+          <div className="flex items-center justify-center h-24">
+            <p className="text-xs italic" style={{ color: 'var(--text-3)' }}>Aucune tâche</p>
+          </div>
         )}
         {tasks.map(task => (
-          <TaskCard key={task.id} task={task} onClick={onTaskClick} onPriorityChanged={onPriorityChanged} isAdmin={isAdmin} />
+          <TaskCard
+            key={task.id}
+            task={task}
+            onClick={onTaskClick}
+            onPriorityChanged={onPriorityChanged}
+            isAdmin={isAdmin}
+          />
         ))}
       </div>
     </div>

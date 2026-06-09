@@ -1,7 +1,6 @@
 import { createContext, useCallback, useContext, useRef, useState } from 'react';
 
 const ToastContext = createContext(null);
-
 let _idCounter = 0;
 
 export function ToastProvider({ children }) {
@@ -14,9 +13,6 @@ export function ToastProvider({ children }) {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
-  /**
-   * show({ title, description, type: 'success'|'error'|'info', duration?: ms })
-   */
   const show = useCallback(({ title, description, type = 'success', duration = 4000 }) => {
     const id = ++_idCounter;
     setToasts(prev => [...prev, { id, title, description, type }]);
@@ -38,58 +34,88 @@ export function useToast() {
   return ctx;
 }
 
-/* ─── UI ────────────────────────────────────────────────────────── */
-
-const ICONS = {
-  success: (
-    <svg className="w-5 h-5 text-green-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  ),
-  error: (
-    <svg className="w-5 h-5 text-red-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  ),
-  info: (
-    <svg className="w-5 h-5 text-indigo-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  ),
+/* ── Toast types ──────────────────────────────────────────────── */
+const TYPE_CFG = {
+  success: {
+    accent: '#15803D',
+    bg:     '#F0FDF4',
+    border: '#86EFAC',
+    icon: (
+      <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+      </svg>
+    ),
+  },
+  error: {
+    accent: '#DC2626',
+    bg:     '#FEF2F2',
+    border: '#FCA5A5',
+    icon: (
+      <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+      </svg>
+    ),
+  },
+  info: {
+    accent: '#0E7490',
+    bg:     '#EFF9FB',
+    border: '#67E8F9',
+    icon: (
+      <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 16h-1v-4h-1m1-4h.01" />
+        <circle cx="12" cy="12" r="10" strokeWidth={2} />
+      </svg>
+    ),
+  },
 };
 
-const BORDER = {
-  success: 'border-l-4 border-green-400',
-  error:   'border-l-4 border-red-400',
-  info:    'border-l-4 border-indigo-400',
-};
-
+/* ── Toast container ──────────────────────────────────────────── */
 function ToastContainer({ toasts, onDismiss }) {
   if (toasts.length === 0) return null;
   return (
-    <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3 max-w-sm w-full pointer-events-none">
-      {toasts.map(t => (
-        <div
-          key={t.id}
-          className={`pointer-events-auto bg-white rounded-xl shadow-lg px-4 py-3 flex items-start gap-3 ${BORDER[t.type]} animate-slide-in`}
-        >
-          {ICONS[t.type]}
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-gray-900">{t.title}</p>
-            {t.description && (
-              <p className="text-xs text-gray-500 mt-0.5 truncate">{t.description}</p>
-            )}
-          </div>
-          <button
-            onClick={() => onDismiss(t.id)}
-            className="text-gray-400 hover:text-gray-600 shrink-0 mt-0.5"
+    <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2.5 max-w-[340px] w-full pointer-events-none">
+      {toasts.map(t => {
+        const cfg = TYPE_CFG[t.type] ?? TYPE_CFG.info;
+        return (
+          <div
+            key={t.id}
+            className="pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-2xl border animate-slide-in"
+            style={{
+              background: cfg.bg,
+              borderColor: cfg.border,
+              boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+            }}
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      ))}
+            {/* Icon */}
+            <div className="mt-0.5 shrink-0" style={{ color: cfg.accent }}>
+              {cfg.icon}
+            </div>
+
+            {/* Text */}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold" style={{ color: cfg.accent }}>
+                {t.title}
+              </p>
+              {t.description && (
+                <p className="text-xs mt-0.5 truncate" style={{ color: cfg.accent, opacity: 0.75 }}>
+                  {t.description}
+                </p>
+              )}
+            </div>
+
+            {/* Dismiss */}
+            <button
+              onClick={() => onDismiss(t.id)}
+              className="shrink-0 mt-0.5 transition-opacity hover:opacity-60"
+              style={{ color: cfg.accent }}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }

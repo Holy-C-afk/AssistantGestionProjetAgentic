@@ -1,54 +1,87 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  getProjectById,
-  getProjectMembers,
-  addMemberByEmail,
-  removeMember,
-  updateProject,
-  updateProjectStatus,
-  downloadProjectPdf,
-  getUsers,
+  getProjectById, getProjectMembers, addMemberByEmail, removeMember,
+  updateProject, updateProjectStatus, downloadProjectPdf, getUsers,
 } from '../api/projectApi';
 import SprintSelector from '../components/SprintSelector';
 import KanbanBoard from '../components/KanbanBoard';
 import TaskDetailModal from '../components/TaskDetailModal';
 import AgentPanel from '../components/AgentPanel';
 
+/* ── Status config ─────────────────────────────────────────────── */
+const STATUS_CFG = {
+  active:    { label: 'Actif',    bg: '#F0FDF4', text: '#15803D', dot: '#16A34A' },
+  archived:  { label: 'Archivé', bg: '#FFFBEB', text: '#B45309', dot: '#D97706' },
+  completed: { label: 'Terminé', bg: '#EFF9FB', text: '#0E7490', dot: '#0E9488' },
+};
+
+/* ── Role config ───────────────────────────────────────────────── */
+const ROLE_CFG = {
+  admin:  { label: 'Chef de projet', bg: '#F3E8FF', text: '#7C3AED' },
+  owner:  { label: 'Chef de projet', bg: '#F3E8FF', text: '#7C3AED' },
+  member: { label: 'Collaborateur',  bg: '#EFF9FB', text: '#0E7490' },
+  viewer: { label: 'Observateur',    bg: '#F4F2EE', text: '#6B6560' },
+};
+
+/* ── SVG icons ─────────────────────────────────────────────────── */
+const IconArrow = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+  </svg>
+);
+const IconEdit = () => (
+  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+  </svg>
+);
+const IconPdf = () => (
+  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+      d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+  </svg>
+);
+const IconSearch = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+  </svg>
+);
+const IconX = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+  </svg>
+);
+
+/* ─────────────────────────────────────────────────────────────── */
 export default function ProjectDetailPage() {
-  const { id } = useParams();
+  const { id }   = useParams();
   const navigate = useNavigate();
 
-  const [project, setProject] = useState(null);
-  const [members, setMembers] = useState([]);
-  const [tab, setTab] = useState('board');
+  const [project,  setProject]  = useState(null);
+  const [members,  setMembers]  = useState([]);
+  const [tab,      setTab]      = useState('board');
   const [selectedSprintId, setSelectedSprintId] = useState(null);
-  const [selectedTaskId, setSelectedTaskId] = useState(null);
+  const [selectedTaskId,   setSelectedTaskId]   = useState(null);
   const [boardRefreshKey,  setBoardRefreshKey]  = useState(0);
   const [sprintRefreshKey, setSprintRefreshKey] = useState(0);
 
-  // member-picker state
-  const [newRole, setNewRole] = useState('member');
-  const [addingMember, setAddingMember] = useState(false);
-  const [userSearch, setUserSearch] = useState('');
-  const [allUsers, setAllUsers] = useState([]);
-  const [selectedUser, setSelectedUser] = useState(null); // { id, email, fullName }
+  // Member picker
+  const [newRole,       setNewRole]       = useState('member');
+  const [addingMember,  setAddingMember]  = useState(false);
+  const [userSearch,    setUserSearch]    = useState('');
+  const [allUsers,      setAllUsers]      = useState([]);
+  const [selectedUser,  setSelectedUser]  = useState(null);
 
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ name: '', description: '' });
-  const [error, setError] = useState('');
-  const [pdfLoading, setPdfLoading] = useState(false);
+  const [editing,     setEditing]     = useState(false);
+  const [form,        setForm]        = useState({ name: '', description: '' });
+  const [error,       setError]       = useState('');
+  const [pdfLoading,  setPdfLoading]  = useState(false);
 
-  // isAdmin = true for Chef de projet:
-  //   • project owner (ownerId)
-  //   • member with role 'admin'  (new projects)
-  //   • member with role 'owner'  (legacy rows created before the fix)
   const currentUserId = sessionStorage.getItem('userId');
   const isOwner       = project?.ownerId === currentUserId;
   const currentMember = members.find(m => m.userId === currentUserId);
-  const isAdmin       = isOwner
-    || currentMember?.role === 'admin'
-    || currentMember?.role === 'owner';
+  const isAdmin       = isOwner || currentMember?.role === 'admin' || currentMember?.role === 'owner';
 
   useEffect(() => {
     getProjectById(id).then(p => {
@@ -58,30 +91,21 @@ export default function ProjectDetailPage() {
     getProjectMembers(id).then(setMembers).catch(console.error);
   }, [id]);
 
-  // Load all registered users whenever the Members tab is opened
   useEffect(() => {
-    if (tab === 'members') {
-      getUsers().then(setAllUsers).catch(console.error);
-    }
+    if (tab === 'members') getUsers().then(setAllUsers).catch(console.error);
   }, [tab]);
 
   const handleAddMember = async (e) => {
     e?.preventDefault();
     if (!selectedUser) return;
-    setError('');
-    setAddingMember(true);
+    setError(''); setAddingMember(true);
     try {
       await addMemberByEmail(id, selectedUser.email, newRole);
       const updated = await getProjectMembers(id);
-      setMembers(updated);
-      setSelectedUser(null);
-      setUserSearch('');
-      setNewRole('member');
+      setMembers(updated); setSelectedUser(null); setUserSearch(''); setNewRole('member');
     } catch (err) {
       setError(err?.response?.data?.message || "Erreur lors de l'ajout du membre.");
-    } finally {
-      setAddingMember(false);
-    }
+    } finally { setAddingMember(false); }
   };
 
   const handleRemoveMember = async (userId) => {
@@ -95,20 +119,15 @@ export default function ProjectDetailPage() {
     e.preventDefault();
     try {
       const updated = await updateProject(id, form);
-      setProject(updated);
-      setEditing(false);
+      setProject(updated); setEditing(false);
     } catch (e) { console.error(e); }
   };
 
   const handleExportPdf = async () => {
     setPdfLoading(true);
-    try {
-      await downloadProjectPdf(id, project.name);
-    } catch {
-      setError('Erreur lors de la génération du PDF.');
-    } finally {
-      setPdfLoading(false);
-    }
+    try { await downloadProjectPdf(id, project.name); }
+    catch { setError('Erreur lors de la génération du PDF.'); }
+    finally { setPdfLoading(false); }
   };
 
   const handleStatusChange = async (newStatus) => {
@@ -116,144 +135,152 @@ export default function ProjectDetailPage() {
     try {
       const updated = await updateProjectStatus(id, newStatus);
       setProject(p => ({ ...p, status: updated.status }));
-    } catch {
-      setError('Erreur lors du changement de statut.');
-    }
+    } catch { setError('Erreur lors du changement de statut.'); }
   };
 
   const refreshBoard = () => setBoardRefreshKey(k => k + 1);
 
-  // Called by KanbanBoard / SprintSelector / TaskDetailModal when the backend
-  // auto-closes a sprint, completes a project, reopens a sprint, or reactivates a project.
   const handleAutoRefresh = ({ sprintAutoClosed, projectAutoCompleted, sprintReopened, projectReactivated } = {}) => {
     if (sprintAutoClosed || sprintReopened) setSprintRefreshKey(k => k + 1);
-    // Always re-fetch project data when any sprint or project state changes
-    // (covers the case where sprintReopened=true but projectReactivated=false)
     if (sprintAutoClosed || sprintReopened || projectAutoCompleted || projectReactivated) {
       getProjectById(id).then(p => setProject(p)).catch(console.error);
     }
   };
 
+  /* Loading skeleton */
   if (!project) return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+    <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg)' }}>
       <div className="flex flex-col items-center gap-3">
-        <span className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
-        <p className="text-sm text-gray-400">Chargement du projet…</p>
+        <span className="w-8 h-8 border-4 border-t-transparent rounded-full animate-spin"
+          style={{ borderColor: 'var(--border)', borderTopColor: 'var(--accent)' }} />
+        <p className="text-sm" style={{ color: 'var(--text-3)' }}>Chargement…</p>
       </div>
     </div>
   );
 
-  const STATUS_BADGE = {
-    active:    'bg-green-100 text-green-700 border border-green-200',
-    archived:  'bg-yellow-100 text-yellow-700 border border-yellow-200',
-    completed: 'bg-blue-100 text-blue-700 border border-blue-200',
-  };
-  const STATUS_LABEL = { active: 'Actif', archived: 'Archivé', completed: 'Terminé' };
+  const statusCfg = STATUS_CFG[project.status] ?? { label: project.status, bg: 'var(--surface-2)', text: 'var(--text-2)', dot: 'var(--text-3)' };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
 
-      {/* ── Project header ──────────────────────────────────────────────── */}
-      <div className="bg-white border-b border-gray-200 px-6 py-5">
-        <div className="max-w-7xl mx-auto">
+      {/* ── Project header ──────────────────────────────────────── */}
+      <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
+        <div className="max-w-7xl mx-auto px-6 py-5">
 
+          {/* Breadcrumb */}
           <button onClick={() => navigate('/')}
-            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-indigo-600 transition mb-4">
-            ← Retour aux projets
+            className="flex items-center gap-1.5 text-sm mb-4 transition-colors"
+            style={{ color: 'var(--text-3)' }}
+            onMouseEnter={e => e.currentTarget.style.color = 'var(--accent)'}
+            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-3)'}>
+            <IconArrow />
+            <span>Projets</span>
           </button>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-4 text-sm flex items-center gap-2">
-              ⚠️ {error}
+            <div className="flex items-center gap-2 text-sm px-4 py-3 rounded-xl mb-4 border"
+              style={{ background: 'var(--danger-bg)', borderColor: '#FCA5A5', color: 'var(--danger)' }}>
+              ⚠ {error}
             </div>
           )}
 
           {editing ? (
             <form onSubmit={handleUpdate} className="space-y-3 max-w-xl">
               <input
-                className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-xl font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2.5 text-xl font-bold rounded-xl border outline-none transition-all"
+                style={{ borderColor: 'var(--border)', background: 'var(--surface-2)', color: 'var(--text-1)' }}
                 value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required
+                onFocus={e => e.target.style.borderColor = 'var(--accent)'}
+                onBlur={e => e.target.style.borderColor = 'var(--border)'}
               />
               <textarea
-                className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                className="w-full px-4 py-2.5 text-sm rounded-xl border outline-none resize-none transition-all"
+                style={{ borderColor: 'var(--border)', background: 'var(--surface-2)', color: 'var(--text-1)' }}
                 value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
                 rows={2} placeholder="Description (optionnel)"
+                onFocus={e => e.target.style.borderColor = 'var(--accent)'}
+                onBlur={e => e.target.style.borderColor = 'var(--border)'}
               />
               <div className="flex gap-2">
-                <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-indigo-700 transition">Sauvegarder</button>
-                <button type="button" onClick={() => setEditing(false)} className="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-200 transition">Annuler</button>
+                <ActionBtn primary onClick={e => { e.preventDefault(); handleUpdate(e); }}>Sauvegarder</ActionBtn>
+                <ActionBtn onClick={() => setEditing(false)}>Annuler</ActionBtn>
               </div>
             </form>
           ) : (
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
               <div>
                 <div className="flex items-center gap-3 mb-1.5 flex-wrap">
-                  <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
-                  <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${STATUS_BADGE[project.status] ?? 'bg-gray-100 text-gray-600'}`}>
-                    {STATUS_LABEL[project.status] ?? project.status}
+                  <h1 className="text-2xl font-bold tracking-tight" style={{ color: 'var(--text-1)' }}>
+                    {project.name}
+                  </h1>
+                  <span className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full"
+                    style={{ background: statusCfg.bg, color: statusCfg.text }}>
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: statusCfg.dot }} />
+                    {statusCfg.label}
                   </span>
                 </div>
-                <p className="text-gray-500 text-sm">{project.description || <span className="italic text-gray-400">Pas de description</span>}</p>
-                <p className="text-xs text-gray-400 mt-2">
+                <p className="text-sm mb-2" style={{ color: project.description ? 'var(--text-2)' : 'var(--text-3)' }}>
+                  {project.description || <em>Pas de description</em>}
+                </p>
+                <p className="text-xs" style={{ color: 'var(--text-3)' }}>
                   Créé le {new Date(project.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}
-                  {' · '} <span className="font-medium">{members.length}</span> membre{members.length !== 1 ? 's' : ''}
+                  {' · '} <span style={{ color: 'var(--text-2)' }}>{members.length}</span> membre{members.length !== 1 ? 's' : ''}
                 </p>
               </div>
 
-              {/* Actions — chef de projet only */}
+              {/* Action buttons */}
               <div className="flex items-center gap-2 flex-wrap shrink-0">
-                {isAdmin && <button onClick={() => setEditing(true)}
-                  className="text-sm px-3 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 transition">
-                  ✏️ Modifier
-                </button>}
+                {isAdmin && (
+                  <ActionBtn icon={<IconEdit />} onClick={() => setEditing(true)}>Modifier</ActionBtn>
+                )}
                 {isAdmin && project.status !== 'archived' && (
-                  <button onClick={() => handleStatusChange('archived')}
-                    className="text-sm px-3 py-2 rounded-lg border border-yellow-200 bg-yellow-50 text-yellow-700 hover:bg-yellow-100 transition">
-                    📦 Archiver
-                  </button>
+                  <ActionBtn warning onClick={() => handleStatusChange('archived')}>Archiver</ActionBtn>
                 )}
                 {isAdmin && project.status !== 'completed' && (
-                  <button onClick={() => handleStatusChange('completed')}
-                    className="text-sm px-3 py-2 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition">
-                    ✅ Terminer
-                  </button>
+                  <ActionBtn onClick={() => handleStatusChange('completed')}>Terminer</ActionBtn>
                 )}
                 {isAdmin && (project.status === 'archived' || project.status === 'completed') && (
-                  <button onClick={() => handleStatusChange('active')}
-                    className="text-sm px-3 py-2 rounded-lg border border-green-200 bg-green-50 text-green-700 hover:bg-green-100 transition">
-                    ▶ Réactiver
-                  </button>
+                  <ActionBtn success onClick={() => handleStatusChange('active')}>Réactiver</ActionBtn>
                 )}
-                <button onClick={handleExportPdf} disabled={pdfLoading}
-                  className="text-sm px-3 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 hover:text-indigo-600 transition disabled:opacity-50 flex items-center gap-1.5">
-                  {pdfLoading
-                    ? <><span className="w-4 h-4 border-2 border-gray-300 border-t-indigo-600 rounded-full animate-spin inline-block" /> PDF…</>
-                    : '📄 PDF'}
-                </button>
+                <ActionBtn
+                  icon={pdfLoading
+                    ? <span className="w-3.5 h-3.5 border-2 border-t-current rounded-full animate-spin inline-block" />
+                    : <IconPdf />}
+                  onClick={handleExportPdf}
+                  disabled={pdfLoading}>
+                  PDF
+                </ActionBtn>
               </div>
             </div>
           )}
         </div>
+
+        {/* Tab bar */}
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="flex gap-0">
+            {[
+              { k: 'board',   l: 'Sprint Board' },
+              { k: 'members', l: `Membres (${members.length})` },
+            ].map(t => (
+              <button key={t.k}
+                onClick={() => setTab(t.k)}
+                className="px-5 py-3 text-sm font-medium transition-all relative"
+                style={{
+                  color: tab === t.k ? 'var(--accent)' : 'var(--text-2)',
+                  borderBottom: `2px solid ${tab === t.k ? 'var(--accent)' : 'transparent'}`,
+                }}>
+                {t.l}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
+      {/* ── Content ─────────────────────────────────────────────── */}
       <div className="max-w-7xl mx-auto px-6 py-6">
 
-        {/* ── Tabs ──────────────────────────────────────────────────────── */}
-        <div className="flex gap-1 mb-6 bg-gray-200/60 rounded-xl p-1 w-fit">
-          {[{ k: 'board', l: '📋 Sprint Board' }, { k: 'members', l: `👥 Membres (${members.length})` }].map(t => (
-            <button key={t.k} onClick={() => setTab(t.k)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                tab === t.k
-                  ? 'bg-white text-indigo-700 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}>
-              {t.l}
-            </button>
-          ))}
-        </div>
-
         {tab === 'board' && (
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
             <div className="lg:col-span-1">
               <SprintSelector
                 projectId={id}
@@ -278,164 +305,175 @@ export default function ProjectDetailPage() {
         )}
 
         {tab === 'members' && (
-          <div className={`grid grid-cols-1 ${isAdmin ? 'lg:grid-cols-2' : ''} gap-6`}>
+          <div className={`grid grid-cols-1 ${isAdmin ? 'lg:grid-cols-2' : ''} gap-5`}>
 
-            {/* ── Left: user picker — admin only ────────────────────────────── */}
-            {isAdmin && <div className="bg-white rounded-xl shadow p-5">
-              <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                👥 Ajouter un utilisateur
-              </h3>
+            {/* Add member panel — admin only */}
+            {isAdmin && (
+              <div className="rounded-2xl border p-5" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+                <h3 className="text-sm font-semibold mb-4" style={{ color: 'var(--text-1)' }}>
+                  Ajouter un utilisateur
+                </h3>
 
-              {/* Search box */}
-              <div className="relative mb-3">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
-                <input
-                  type="text"
-                  placeholder="Rechercher par nom ou email…"
-                  value={userSearch}
-                  onChange={e => { setUserSearch(e.target.value); setSelectedUser(null); }}
-                  className="w-full border border-gray-300 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
+                {/* Search box */}
+                <div className="relative mb-3">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                    style={{ color: 'var(--text-3)' }}>
+                    <IconSearch />
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="Rechercher par nom ou email…"
+                    value={userSearch}
+                    onChange={e => { setUserSearch(e.target.value); setSelectedUser(null); }}
+                    className="w-full pl-10 pr-3 py-2.5 text-sm rounded-xl border outline-none transition-all"
+                    style={{ background: 'var(--surface-2)', borderColor: 'var(--border)', color: 'var(--text-1)' }}
+                    onFocus={e => e.target.style.borderColor = 'var(--accent)'}
+                    onBlur={e => e.target.style.borderColor = 'var(--border)'}
+                  />
+                </div>
 
-              {/* User list (filtered, excluding already-members) */}
-              {(() => {
-                const memberIds = new Set(members.map(m => m.userId));
-                const term = userSearch.trim().toLowerCase();
-                const filtered = allUsers.filter(u =>
-                  !memberIds.has(u.id) &&
-                  (!term ||
-                    u.fullName.toLowerCase().includes(term) ||
-                    u.email.toLowerCase().includes(term))
-                );
-
-                return (
-                  <div className="border border-gray-200 rounded-lg overflow-hidden mb-4 max-h-64 overflow-y-auto">
-                    {filtered.length === 0 ? (
-                      <p className="text-xs text-gray-400 text-center py-6 italic">
-                        {allUsers.length === 0
-                          ? 'Aucun utilisateur enregistré.'
-                          : 'Aucun résultat — tous sont déjà membres ou la recherche ne correspond pas.'}
-                      </p>
-                    ) : (
-                      filtered.map(u => {
-                        const initials = u.fullName
+                {/* User list */}
+                {(() => {
+                  const memberIds = new Set(members.map(m => m.userId));
+                  const term = userSearch.trim().toLowerCase();
+                  const filtered = allUsers.filter(u =>
+                    !memberIds.has(u.id) &&
+                    (!term || u.fullName.toLowerCase().includes(term) || u.email.toLowerCase().includes(term))
+                  );
+                  return (
+                    <div className="rounded-xl border overflow-hidden mb-4 max-h-64 overflow-y-auto"
+                      style={{ borderColor: 'var(--border)' }}>
+                      {filtered.length === 0 ? (
+                        <p className="text-xs text-center py-6 italic" style={{ color: 'var(--text-3)' }}>
+                          {allUsers.length === 0
+                            ? 'Aucun utilisateur enregistré.'
+                            : 'Aucun résultat correspondant.'}
+                        </p>
+                      ) : filtered.map(u => {
+                        const ini = u.fullName
                           ? u.fullName.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2)
                           : u.email[0].toUpperCase();
                         const isSelected = selectedUser?.id === u.id;
                         return (
                           <button
-                            key={u.id}
-                            type="button"
+                            key={u.id} type="button"
                             onClick={() => setSelectedUser(isSelected ? null : u)}
-                            className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition border-b border-gray-100 last:border-0
-                              ${isSelected
-                                ? 'bg-indigo-50 border-indigo-200'
-                                : 'hover:bg-gray-50'}`}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors border-b last:border-0"
+                            style={{
+                              background: isSelected ? 'var(--accent-light)' : 'transparent',
+                              borderColor: 'var(--border)',
+                            }}
+                            onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = 'var(--surface-2)'; }}
+                            onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
                           >
-                            <div className={`w-8 h-8 rounded-full text-white text-xs font-bold flex items-center justify-center shrink-0
-                              ${isSelected ? 'bg-indigo-600' : 'bg-gray-400'}`}>
-                              {initials}
+                            <div className="w-8 h-8 rounded-full text-white text-xs font-bold flex items-center justify-center shrink-0"
+                              style={{ background: isSelected ? 'var(--accent)' : 'var(--text-3)' }}>
+                              {ini}
                             </div>
                             <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium text-gray-900 truncate">{u.fullName}</p>
-                              <p className="text-xs text-gray-500 truncate">{u.email}</p>
+                              <p className="text-sm font-medium truncate" style={{ color: 'var(--text-1)' }}>{u.fullName}</p>
+                              <p className="text-xs truncate" style={{ color: 'var(--text-3)' }}>{u.email}</p>
                             </div>
                             {isSelected && (
-                              <span className="text-indigo-600 text-xs font-semibold shrink-0">✓ Sélectionné</span>
+                              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                style={{ color: 'var(--accent)' }}>
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                              </svg>
                             )}
                           </button>
                         );
-                      })
-                    )}
+                      })}
+                    </div>
+                  );
+                })()}
+
+                {/* Role + add button */}
+                {selectedUser && (
+                  <div className="p-3 rounded-xl border mb-3"
+                    style={{ background: 'var(--accent-light)', borderColor: 'var(--accent)' }}>
+                    <p className="text-xs font-medium mb-2" style={{ color: 'var(--accent-text)' }}>
+                      Ajouter <strong>{selectedUser.fullName}</strong> en tant que :
+                    </p>
+                    <div className="flex gap-2">
+                      <select
+                        value={newRole}
+                        onChange={e => setNewRole(e.target.value)}
+                        className="flex-1 px-3 py-2 text-sm rounded-xl border outline-none transition-all"
+                        style={{ background: 'var(--surface)', borderColor: 'var(--accent)', color: 'var(--text-1)' }}>
+                        <option value="member">Collaborateur</option>
+                        <option value="admin">Chef de projet</option>
+                      </select>
+                      <button
+                        onClick={handleAddMember}
+                        disabled={addingMember}
+                        className="px-4 py-2 rounded-xl text-sm font-semibold text-white transition-colors disabled:opacity-50 flex items-center gap-2"
+                        style={{ background: 'var(--accent)' }}>
+                        {addingMember
+                          ? <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                          : '+ Ajouter'}
+                      </button>
+                    </div>
                   </div>
-                );
-              })()}
+                )}
 
-              {/* Role selector + Add button */}
-              {selectedUser && (
-                <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 mb-3">
-                  <p className="text-xs text-indigo-700 font-medium mb-2">
-                    Ajouter <strong>{selectedUser.fullName}</strong> en tant que :
-                  </p>
-                  <div className="flex gap-2">
-                    <select
-                      value={newRole}
-                      onChange={e => setNewRole(e.target.value)}
-                      className="flex-1 border border-indigo-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    >
-                      <option value="member">Collaborateur</option>
-                      <option value="admin">Chef de projet</option>
-                    </select>
-                    <button
-                      onClick={handleAddMember}
-                      disabled={addingMember}
-                      className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2 transition"
-                    >
-                      {addingMember
-                        ? <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin inline-block" />
-                        : '+ Ajouter'}
-                    </button>
-                  </div>
-                </div>
-              )}
+                <p className="text-xs text-center" style={{ color: 'var(--text-3)' }}>
+                  Seuls les utilisateurs connectés au moins une fois apparaissent.
+                </p>
+              </div>
+            )}
 
-              <p className="text-xs text-gray-400 text-center">
-                Seuls les utilisateurs connectés au moins une fois à AgentPM apparaissent.
-              </p>
-            </div>}
-
-            {/* ── Right: current members ────────────────────────────────────── */}
-            <div className="bg-white rounded-xl shadow p-5">
-              <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                ✅ Membres actuels
-                <span className="bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full font-normal">
+            {/* Current members */}
+            <div className="rounded-2xl border p-5" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+              <div className="flex items-center gap-2 mb-4">
+                <h3 className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>
+                  Membres actuels
+                </h3>
+                <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+                  style={{ background: 'var(--accent-light)', color: 'var(--accent)' }}>
                   {members.length}
                 </span>
-              </h3>
+              </div>
 
               <div className="space-y-2 max-h-[450px] overflow-y-auto">
                 {members.length === 0 && (
-                  <p className="text-gray-400 text-sm text-center py-8">Aucun membre pour l'instant.</p>
+                  <p className="text-sm text-center py-8 italic" style={{ color: 'var(--text-3)' }}>
+                    Aucun membre pour l'instant.
+                  </p>
                 )}
                 {members.map(m => {
-                  const initials = m.fullName
+                  const ini = m.fullName
                     ? m.fullName.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2)
                     : '?';
-                  // 'owner' (legacy) and 'admin' both display as "Chef de projet"
-                  const roleLabel = {
-                    owner:  'Chef de projet',
-                    admin:  'Chef de projet',
-                    member: 'Collaborateur',
-                    viewer: 'Observateur',
-                  }[m.role] ?? m.role;
-                  const roleColor = {
-                    owner:  'bg-purple-100 text-purple-700',
-                    admin:  'bg-purple-100 text-purple-700',
-                    member: 'bg-indigo-100 text-indigo-700',
-                    viewer: 'bg-gray-100 text-gray-600',
-                  }[m.role] ?? 'bg-gray-100 text-gray-600';
-
+                  const roleCfg = ROLE_CFG[m.role] ?? { label: m.role, bg: 'var(--surface-2)', text: 'var(--text-2)' };
                   return (
-                    <div key={m.userId} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition">
+                    <div key={m.userId}
+                      className="flex items-center justify-between p-3 rounded-xl transition-colors"
+                      style={{ background: 'var(--surface-2)' }}>
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-indigo-600 text-white text-sm font-semibold flex items-center justify-center shrink-0">
-                          {initials}
+                        <div className="w-9 h-9 rounded-full text-white text-sm font-semibold flex items-center justify-center shrink-0"
+                          style={{ background: 'var(--accent)' }}>
+                          {ini}
                         </div>
                         <div>
-                          <p className="font-medium text-gray-900 text-sm">{m.fullName}</p>
-                          <p className="text-xs text-gray-500">{m.email}</p>
+                          <p className="font-medium text-sm" style={{ color: 'var(--text-1)' }}>{m.fullName}</p>
+                          <p className="text-xs" style={{ color: 'var(--text-3)' }}>{m.email}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${roleColor}`}>{roleLabel}</span>
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+                          style={{ background: roleCfg.bg, color: roleCfg.text }}>
+                          {roleCfg.label}
+                        </span>
                         {isAdmin && (
                           <button
                             onClick={() => handleRemoveMember(m.userId)}
-                            className="text-gray-400 hover:text-red-500 transition text-sm p-1 rounded hover:bg-red-50"
+                            className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
+                            style={{ color: 'var(--text-3)', background: 'transparent' }}
                             title="Retirer du projet"
+                            onMouseEnter={e => { e.currentTarget.style.color = 'var(--danger)'; e.currentTarget.style.background = 'var(--danger-bg)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-3)'; e.currentTarget.style.background = 'transparent'; }}
                           >
-                            ✕
+                            <IconX />
                           </button>
                         )}
                       </div>
@@ -444,7 +482,6 @@ export default function ProjectDetailPage() {
                 })}
               </div>
             </div>
-
           </div>
         )}
 
@@ -458,11 +495,38 @@ export default function ProjectDetailPage() {
             onAutoRefresh={handleAutoRefresh}
           />
         )}
-
       </div>
 
-      {/* Floating AI assistant — scoped to this project */}
+      {/* Floating AI assistant */}
       <AgentPanel projectId={id} sprintId={selectedSprintId} />
     </div>
+  );
+}
+
+/* ── Action button ─────────────────────────────────────────────── */
+function ActionBtn({ children, onClick, disabled, icon, primary, warning, success, danger }) {
+  let style = {};
+  if (primary) {
+    style = { background: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' };
+  } else if (warning) {
+    style = { background: 'var(--warning-bg)', color: 'var(--warning)', borderColor: '#FDE68A' };
+  } else if (success) {
+    style = { background: 'var(--success-bg)', color: 'var(--success)', borderColor: '#86EFAC' };
+  } else if (danger) {
+    style = { background: 'var(--danger-bg)', color: 'var(--danger)', borderColor: '#FCA5A5' };
+  } else {
+    style = { background: 'var(--surface)', color: 'var(--text-2)', borderColor: 'var(--border)' };
+  }
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="flex items-center gap-1.5 text-sm px-3.5 py-2 rounded-xl border transition-all disabled:opacity-50 hover:-translate-y-px active:scale-[0.98]"
+      style={style}
+    >
+      {icon}
+      {children}
+    </button>
   );
 }
