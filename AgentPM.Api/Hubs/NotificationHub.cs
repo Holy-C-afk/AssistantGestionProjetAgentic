@@ -29,10 +29,20 @@ public class NotificationHub : Hub
 
     private Guid? GetUserId()
     {
-        if (Context.GetHttpContext()?.Request.Headers
-                .TryGetValue("X-User-Id", out var v) == true &&
+        var http = Context.GetHttpContext();
+
+        // Custom headers are only reliably sent on the initial negotiate
+        // request — native WebSocket connections cannot carry them. Fall
+        // back to a query-string parameter set by the client when opening
+        // the connection (see NotificationCenter.jsx).
+        if (http?.Request.Headers.TryGetValue("X-User-Id", out var v) == true &&
             Guid.TryParse(v, out var id))
             return id;
+
+        if (http?.Request.Query.TryGetValue("userId", out var q) == true &&
+            Guid.TryParse(q, out var qid))
+            return qid;
+
         return null;
     }
 }

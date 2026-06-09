@@ -65,7 +65,7 @@ export default function NotificationCenter() {
   useEffect(() => {
     if (!userId) return;
     const hub = new signalR.HubConnectionBuilder()
-      .withUrl('http://localhost:5157/hubs/notifications', {
+      .withUrl(`http://localhost:5157/hubs/notifications?userId=${encodeURIComponent(userId)}`, {
         headers: { 'X-User-Id': userId },
         skipNegotiation: false,
         transport: signalR.HttpTransportType.WebSockets | signalR.HttpTransportType.LongPolling,
