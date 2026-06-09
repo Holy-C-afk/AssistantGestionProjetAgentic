@@ -29,6 +29,7 @@ public class GetProjectByIdHandler : IRequestHandler<GetProjectByIdQuery, Projec
             aggregate.Project.OwnerId,
             aggregate.Project.Status,
             aggregate.Project.CreatedAt,
+            aggregate.Project.UpdatedAt,
             MemberCount: aggregate.Project.Members.Count,
             CurrentUserRole: role,
             SprintCount: aggregate.Project.Sprints.Count,

@@ -7,6 +7,7 @@ public record ProjectDto(
     Guid OwnerId,
     string Status,
     DateTime CreatedAt,
+    DateTime UpdatedAt,
     int MemberCount,
     string CurrentUserRole,  // role of the requesting user in this project
     int SprintCount,

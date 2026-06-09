@@ -282,7 +282,8 @@ public class ProjectController : ControllerBase
         var project = await _db.Projects.FindAsync(id);
         if (project is null) return NotFound();
 
-        project.Status = request.Status;
+        project.Status    = request.Status;
+        project.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
         return Ok(new { project.Id, project.Status });
     }

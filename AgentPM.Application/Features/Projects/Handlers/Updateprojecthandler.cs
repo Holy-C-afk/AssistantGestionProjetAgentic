@@ -25,6 +25,7 @@ public class UpdateProjectHandler : IRequestHandler<UpdateProjectCommand, Projec
         var member = aggregate.Project.Members.FirstOrDefault(m => m.UserId == request.UpdatedById);
         var role   = member?.Role ?? (aggregate.Project.OwnerId == request.UpdatedById ? "admin" : "member");
 
+        aggregate.Project.UpdatedAt = DateTime.UtcNow;
         return new ProjectDto(
             aggregate.Project.Id,
             aggregate.Project.Name,
@@ -32,6 +33,7 @@ public class UpdateProjectHandler : IRequestHandler<UpdateProjectCommand, Projec
             aggregate.Project.OwnerId,
             aggregate.Project.Status,
             aggregate.Project.CreatedAt,
+            aggregate.Project.UpdatedAt,
             MemberCount: aggregate.Project.Members.Count,
             CurrentUserRole: role,
             SprintCount: aggregate.Project.Sprints.Count,

@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { getMyProjects, createProject, deleteProject } from '../api/projectApi';
+import { getMyProjects, createProject, deleteProject, updateProjectStatus } from '../api/projectApi';
 
 const PAGE_SIZE = 9;
+const FAV_KEY   = 'agentpm_fav_projects';
 
 // Deterministic accent per project (warm palette, no pure purple-blue)
 const ACCENTS = [
@@ -11,6 +12,39 @@ const ACCENTS = [
   '#1D4ED8','#15803D','#9333EA','#C2410C','#0369A1',
 ];
 const projectAccent = (name = '') => ACCENTS[name.charCodeAt(0) % ACCENTS.length];
+
+/* ── Favourites helpers (localStorage) ─────────────────────────── */
+const getFavs = () => {
+  try { return JSON.parse(localStorage.getItem(FAV_KEY) || '[]'); } catch { return []; }
+};
+const toggleFav = (id) => {
+  const favs = getFavs();
+  const next = favs.includes(id) ? favs.filter(f => f !== id) : [...favs, id];
+  localStorage.setItem(FAV_KEY, JSON.stringify(next));
+  return next;
+};
+
+/* ── Relative time helper ───────────────────────────────────────── */
+function relativeTime(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d)) return null;
+  const diff = Math.floor((Date.now() - d) / 1000);
+  if (diff < 60)  return 'À l\'instant';
+  if (diff < 3600) {
+    const m = Math.floor(diff / 60);
+    return `Il y a ${m} min`;
+  }
+  if (diff < 86400) {
+    const h = Math.floor(diff / 3600);
+    return `Il y a ${h}h`;
+  }
+  if (diff < 86400 * 7) {
+    const day = Math.floor(diff / 86400);
+    return `Il y a ${day}j`;
+  }
+  return d.toLocaleDateString(undefined, { day: '2-digit', month: 'short' });
+}
 
 function getPageNumbers(current, total) {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
@@ -68,6 +102,35 @@ const IconX = () => (
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
   </svg>
 );
+const IconGrid = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+      d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+  </svg>
+);
+const IconList = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+  </svg>
+);
+const IconStar = ({ filled }) => (
+  <svg className="w-3.5 h-3.5" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+      d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+  </svg>
+);
+const IconArchive = () => (
+  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+      d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+  </svg>
+);
+const IconClock = () => (
+  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
 
 /* ── Main page ──────────────────────────────────────────────────── */
 export default function ProjectsPage() {
@@ -81,7 +144,9 @@ export default function ProjectsPage() {
   const [page,        setPage]        = useState(1);
   const [search,      setSearch]      = useState('');
   const [status,      setStatus]      = useState('');
-  const [sortBy,      setSortBy]      = useState('date'); // 'date' | 'name' | 'members' | 'progress'
+  const [sortBy,      setSortBy]      = useState('date');
+  const [viewMode,    setViewMode]    = useState(() => localStorage.getItem('agentpm_view') || 'grid');
+  const [favIds,      setFavIds]      = useState(() => getFavs());
   const [searchInput, setSearchInput] = useState('');
   const [refreshKey,  setRefreshKey]  = useState(0);
   const [showModal,    setShowModal]    = useState(false);
@@ -91,6 +156,7 @@ export default function ProjectsPage() {
   const [error,        setError]        = useState('');
   const [deletingId,   setDeletingId]   = useState(null);
   const [confirmId,    setConfirmId]    = useState(null);
+  const [archivingId,  setArchivingId]  = useState(null);
 
   // Debounce: update `search` 300ms after the user stops typing
   const debounceRef = useRef(null);
@@ -98,7 +164,6 @@ export default function ProjectsPage() {
     setSearchInput(val);
     clearTimeout(debounceRef.current);
     if (val === '') {
-      // Clear immediately — no delay
       setSearch('');
       setPage(1);
     } else {
@@ -108,6 +173,9 @@ export default function ProjectsPage() {
       }, 300);
     }
   };
+
+  // Persist view mode
+  const setView = (v) => { setViewMode(v); localStorage.setItem('agentpm_view', v); };
 
   const totalPages     = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const activeCount    = projects.filter(p => p.status === 'active').length;
@@ -130,7 +198,7 @@ export default function ProjectsPage() {
       setError(t('projects.errors.load'));
       setProjects([]); setTotal(0);
     } finally { setFetching(false); }
-  }, [page, status, search, refreshKey, t]); // refreshKey forces re-fetch when incremented
+  }, [page, status, search, refreshKey, t]);
 
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
 
@@ -146,7 +214,7 @@ export default function ProjectsPage() {
       setShowModal(false);
       setForm({ name: '', description: '' });
       setPage(1);
-      setRefreshKey(k => k + 1); // guaranteed re-fetch even if page was already 1
+      setRefreshKey(k => k + 1);
     } catch { setError(t('projects.errors.create')); }
     finally { setLoading(false); }
   };
@@ -161,16 +229,36 @@ export default function ProjectsPage() {
     finally { setDeletingId(null); }
   };
 
-  const sortedProjects = [...projects].sort((a, b) => {
-    if (sortBy === 'name')     return a.name.localeCompare(b.name);
-    if (sortBy === 'members')  return (b.memberCount ?? 0) - (a.memberCount ?? 0);
-    if (sortBy === 'progress') {
-      const pa = a.taskTotal > 0 ? a.taskDone / a.taskTotal : 0;
-      const pb = b.taskTotal > 0 ? b.taskDone / b.taskTotal : 0;
-      return pb - pa;
-    }
-    return new Date(b.createdAt) - new Date(a.createdAt); // default: date desc
-  });
+  const handleArchive = async (id) => {
+    setArchivingId(id);
+    try {
+      await updateProjectStatus(id, 'archived');
+      setRefreshKey(k => k + 1);
+    } catch { setError('Erreur lors de l\'archivage.'); }
+    finally { setArchivingId(null); }
+  };
+
+  const handleToggleFav = (id) => {
+    const next = toggleFav(id);
+    setFavIds(next);
+  };
+
+  const sortedProjects = (() => {
+    const favs = [...projects].filter(p => favIds.includes(p.id));
+    const rest  = [...projects].filter(p => !favIds.includes(p.id));
+    const sorter = (a, b) => {
+      if (sortBy === 'name')     return a.name.localeCompare(b.name);
+      if (sortBy === 'members')  return (b.memberCount ?? 0) - (a.memberCount ?? 0);
+      if (sortBy === 'progress') {
+        const pa = a.taskTotal > 0 ? a.taskDone / a.taskTotal : 0;
+        const pb = b.taskTotal > 0 ? b.taskDone / b.taskTotal : 0;
+        return pb - pa;
+      }
+      if (sortBy === 'activity') return new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt);
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    };
+    return [...favs.sort(sorter), ...rest.sort(sorter)];
+  })();
 
   const statusFilters = [
     { v: '',          l: t('projects.all')       },
@@ -199,6 +287,12 @@ export default function ProjectsPage() {
                 <Stat n={activeCount}    label={t('projects.active')}    color="var(--success)"  />
                 <div className="w-px h-5" style={{ background: 'var(--border)' }} />
                 <Stat n={completedCount} label={t('projects.completed')} color="var(--accent)"   />
+                {favIds.length > 0 && (
+                  <>
+                    <div className="w-px h-5" style={{ background: 'var(--border)' }} />
+                    <Stat n={favIds.length} label="Favoris" color="#D97706" />
+                  </>
+                )}
               </div>
             </div>
             <button
@@ -245,7 +339,6 @@ export default function ProjectsPage() {
                 onFocus={e => e.target.style.borderColor = 'var(--accent)'}
                 onBlur={e => e.target.style.borderColor = 'var(--border)'}
               />
-              {/* Inline clear ✕ button */}
               {searchInput && (
                 <button
                   onClick={handleClear}
@@ -267,11 +360,35 @@ export default function ProjectsPage() {
             className="px-3 py-2.5 rounded-xl text-xs border outline-none transition-all shrink-0"
             style={{ background: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--text-2)' }}
           >
-            <option value="date">↓ Date</option>
+            <option value="date">↓ Date création</option>
+            <option value="activity">↓ Activité récente</option>
             <option value="name">A → Z</option>
             <option value="members">Membres</option>
             <option value="progress">Progression</option>
           </select>
+
+          {/* View toggle */}
+          <div className="flex rounded-xl border overflow-hidden shrink-0"
+            style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+            <button
+              onClick={() => setView('grid')}
+              title="Vue grille"
+              className="px-3 py-2.5 transition-colors"
+              style={viewMode === 'grid'
+                ? { background: 'var(--accent)', color: '#fff' }
+                : { color: 'var(--text-3)', background: 'transparent' }}>
+              <IconGrid />
+            </button>
+            <button
+              onClick={() => setView('list')}
+              title="Vue liste"
+              className="px-3 py-2.5 transition-colors"
+              style={viewMode === 'list'
+                ? { background: 'var(--accent)', color: '#fff' }
+                : { color: 'var(--text-3)', background: 'transparent' }}>
+              <IconList />
+            </button>
+          </div>
 
           {/* Status pills */}
           <div className="flex gap-1.5 flex-wrap">
@@ -301,20 +418,41 @@ export default function ProjectsPage() {
           {fetching ? '…' : `${total} ${total !== 1 ? t('projects.resultCount_plural', { count: total }) : t('projects.resultCount', { count: total })}${search ? t('projects.resultSearch', { term: search }) : ''}`}
         </p>
 
-        {/* Grid */}
+        {/* Grid / List */}
         {fetching ? (
-          <SkeletonGrid />
+          viewMode === 'grid' ? <SkeletonGrid /> : <SkeletonList />
         ) : projects.length === 0 ? (
           <EmptyState search={search} onCreate={() => setShowModal(true)} t={t} />
-        ) : (
+        ) : viewMode === 'grid' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {sortedProjects.map(project => (
               <ProjectCard
                 key={project.id}
                 project={project}
+                isFav={favIds.includes(project.id)}
                 onClick={() => navigate(`/projects/${project.id}`)}
                 onDelete={e => { e.stopPropagation(); setConfirmId(project.id); }}
+                onToggleFav={e => { e.stopPropagation(); handleToggleFav(project.id); }}
+                onArchive={e => { e.stopPropagation(); handleArchive(project.id); }}
                 isDeleting={deletingId === project.id}
+                isArchiving={archivingId === project.id}
+                t={t}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {sortedProjects.map(project => (
+              <ProjectRow
+                key={project.id}
+                project={project}
+                isFav={favIds.includes(project.id)}
+                onClick={() => navigate(`/projects/${project.id}`)}
+                onDelete={e => { e.stopPropagation(); setConfirmId(project.id); }}
+                onToggleFav={e => { e.stopPropagation(); handleToggleFav(project.id); }}
+                onArchive={e => { e.stopPropagation(); handleArchive(project.id); }}
+                isDeleting={deletingId === project.id}
+                isArchiving={archivingId === project.id}
                 t={t}
               />
             ))}
@@ -435,8 +573,8 @@ export default function ProjectsPage() {
   );
 }
 
-/* ── Project card ───────────────────────────────────────────────── */
-function ProjectCard({ project, onClick, onDelete, isDeleting, t }) {
+/* ── Project card (grid view) ───────────────────────────────────── */
+function ProjectCard({ project, isFav, onClick, onDelete, onToggleFav, onArchive, isDeleting, isArchiving, t }) {
   const accent  = projectAccent(project.name);
   const statusKey = project.status || 'active';
   const STATUS_STYLE = {
@@ -452,6 +590,7 @@ function ProjectCard({ project, onClick, onDelete, isDeleting, t }) {
     : null;
   const isAdmin = project.currentUserRole === 'admin' || project.currentUserRole === 'owner';
   const mc = project.memberCount ?? 0;
+  const activity = relativeTime(project.updatedAt);
 
   return (
     <div
@@ -459,31 +598,66 @@ function ProjectCard({ project, onClick, onDelete, isDeleting, t }) {
       className="group relative rounded-2xl border cursor-pointer transition-all duration-200 overflow-hidden hover:-translate-y-1"
       style={{
         background: 'var(--surface)',
-        borderColor: 'var(--border)',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+        borderColor: isFav ? '#D97706' : 'var(--border)',
+        boxShadow: isFav ? '0 2px 8px rgba(217,119,6,0.15)' : '0 1px 3px rgba(0,0,0,0.04)',
       }}
-      onMouseEnter={e => e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)'}
-      onMouseLeave={e => e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)'}
+      onMouseEnter={e => e.currentTarget.style.boxShadow = isFav ? '0 8px 24px rgba(217,119,6,0.2)' : '0 8px 24px rgba(0,0,0,0.1)'}
+      onMouseLeave={e => e.currentTarget.style.boxShadow = isFav ? '0 2px 8px rgba(217,119,6,0.15)' : '0 1px 3px rgba(0,0,0,0.04)'}
     >
       {/* Left accent bar */}
       <div className="absolute top-0 left-0 bottom-0 w-1 transition-all duration-200 group-hover:w-1.5"
         style={{ background: accent }} />
+
+      {/* Fav indicator strip at top */}
+      {isFav && (
+        <div className="absolute top-0 left-1 right-0 h-0.5" style={{ background: '#D97706' }} />
+      )}
 
       {/* Card body */}
       <div className="pl-5 pr-4 pt-5 pb-4">
 
         {/* Top row */}
         <div className="flex items-start justify-between mb-4">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold text-white select-none shrink-0"
-            style={{ background: accent }}>
-            {initials}
-          </div>
           <div className="flex items-center gap-2">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold text-white select-none shrink-0"
+              style={{ background: accent }}>
+              {initials}
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5">
             <span className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full"
               style={{ background: statusStyle.bg, color: statusStyle.text }}>
               <span className="w-1.5 h-1.5 rounded-full" style={{ background: statusStyle.dot }} />
               {statusLabel}
             </span>
+            {/* Fav button */}
+            <button
+              onClick={onToggleFav}
+              title={isFav ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+              className="w-7 h-7 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
+              style={{ color: isFav ? '#D97706' : 'var(--text-3)', background: isFav ? '#FEF3C7' : 'transparent' }}
+              onMouseEnter={e => { e.currentTarget.style.color = '#D97706'; e.currentTarget.style.background = '#FEF3C7'; }}
+              onMouseLeave={e => { e.currentTarget.style.color = isFav ? '#D97706' : 'var(--text-3)'; e.currentTarget.style.background = isFav ? '#FEF3C7' : 'transparent'; }}
+            >
+              <IconStar filled={isFav} />
+            </button>
+            {/* Archive button — only if active */}
+            {isAdmin && project.status === 'active' && (
+              <button
+                onClick={onArchive}
+                disabled={isArchiving}
+                title="Archiver le projet"
+                className="w-7 h-7 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
+                style={{ color: 'var(--text-3)', background: 'transparent' }}
+                onMouseEnter={e => { e.currentTarget.style.color = '#B45309'; e.currentTarget.style.background = '#FEF9C3'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-3)'; e.currentTarget.style.background = 'transparent'; }}
+              >
+                {isArchiving
+                  ? <span className="w-3.5 h-3.5 border-2 border-t-current rounded-full animate-spin" />
+                  : <IconArchive />}
+              </button>
+            )}
+            {/* Delete button */}
             {isAdmin && (
               <button
                 onClick={onDelete}
@@ -505,6 +679,7 @@ function ProjectCard({ project, onClick, onDelete, isDeleting, t }) {
         {/* Title */}
         <h2 className="font-semibold text-[15px] leading-snug mb-2 line-clamp-1 transition-colors group-hover:opacity-80"
           style={{ color: 'var(--text-1)' }}>
+          {isFav && <span className="mr-1.5 text-[11px]" style={{ color: '#D97706' }}>★</span>}
           {project.name}
         </h2>
 
@@ -552,12 +727,133 @@ function ProjectCard({ project, onClick, onDelete, isDeleting, t }) {
               </span>
             )}
           </div>
-          {date && (
+          {/* Activité récente */}
+          {activity ? (
+            <span className="flex items-center gap-1" title={`Créé le ${date}`}>
+              <IconClock /> {activity}
+            </span>
+          ) : date ? (
             <span className="flex items-center gap-1">
               <IconCalendar /> {date}
             </span>
-          )}
+          ) : null}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Project row (list view) ────────────────────────────────────── */
+function ProjectRow({ project, isFav, onClick, onDelete, onToggleFav, onArchive, isDeleting, isArchiving, t }) {
+  const accent    = projectAccent(project.name);
+  const statusKey = project.status || 'active';
+  const STATUS_STYLE = {
+    active:    { bg: '#F0FDF4', text: '#15803D', dot: '#16A34A' },
+    archived:  { bg: '#FFFBEB', text: '#B45309', dot: '#D97706' },
+    completed: { bg: '#EFF9FB', text: '#0E7490', dot: '#0E9F9F' },
+  };
+  const statusStyle = STATUS_STYLE[statusKey] ?? { bg: 'var(--surface-2)', text: 'var(--text-2)', dot: 'var(--text-3)' };
+  const statusLabel = t(`projects.status.${statusKey}`, { defaultValue: statusKey });
+  const initials    = project.name.slice(0, 2).toUpperCase();
+  const mc          = project.memberCount ?? 0;
+  const isAdmin     = project.currentUserRole === 'admin' || project.currentUserRole === 'owner';
+  const activity    = relativeTime(project.updatedAt);
+  const pct         = project.taskTotal > 0 ? Math.round((project.taskDone / project.taskTotal) * 100) : null;
+
+  return (
+    <div
+      onClick={onClick}
+      className="group flex items-center gap-4 px-5 py-4 rounded-2xl border cursor-pointer transition-all duration-150 hover:-translate-y-0.5"
+      style={{
+        background: 'var(--surface)',
+        borderColor: isFav ? '#D97706' : 'var(--border)',
+        boxShadow: isFav ? '0 2px 6px rgba(217,119,6,0.1)' : '0 1px 2px rgba(0,0,0,0.03)',
+      }}
+      onMouseEnter={e => e.currentTarget.style.boxShadow = '0 4px 14px rgba(0,0,0,0.08)'}
+      onMouseLeave={e => e.currentTarget.style.boxShadow = isFav ? '0 2px 6px rgba(217,119,6,0.1)' : '0 1px 2px rgba(0,0,0,0.03)'}
+    >
+      {/* Accent dot */}
+      <div className="w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold text-white shrink-0"
+        style={{ background: accent }}>
+        {initials}
+      </div>
+
+      {/* Name + description */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-0.5">
+          {isFav && <span style={{ color: '#D97706', fontSize: 11 }}>★</span>}
+          <h3 className="font-semibold text-sm truncate" style={{ color: 'var(--text-1)' }}>{project.name}</h3>
+        </div>
+        <p className="text-xs truncate" style={{ color: 'var(--text-3)' }}>
+          {project.description || t('common.noDescription')}
+        </p>
+      </div>
+
+      {/* Progress pill */}
+      {pct !== null && (
+        <div className="hidden sm:flex items-center gap-2 w-28 shrink-0">
+          <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--surface-2)' }}>
+            <div className="h-full rounded-full" style={{
+              width: `${pct}%`,
+              background: pct === 100 ? 'var(--success)' : 'var(--accent)',
+            }} />
+          </div>
+          <span className="text-[10px] tabular-nums shrink-0" style={{ color: 'var(--text-3)' }}>{pct}%</span>
+        </div>
+      )}
+
+      {/* Status */}
+      <span className="hidden md:flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full shrink-0"
+        style={{ background: statusStyle.bg, color: statusStyle.text }}>
+        <span className="w-1.5 h-1.5 rounded-full" style={{ background: statusStyle.dot }} />
+        {statusLabel}
+      </span>
+
+      {/* Members + sprints */}
+      <div className="hidden lg:flex items-center gap-3 text-xs shrink-0" style={{ color: 'var(--text-3)' }}>
+        <span className="flex items-center gap-1"><IconUsers />{mc}</span>
+        {project.sprintCount > 0 && (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+            style={{ background: 'var(--accent-light)', color: 'var(--accent)' }}>
+            {project.sprintCount}S
+          </span>
+        )}
+      </div>
+
+      {/* Activity */}
+      {activity && (
+        <span className="hidden xl:flex items-center gap-1 text-xs w-24 shrink-0" style={{ color: 'var(--text-3)' }}>
+          <IconClock />{activity}
+        </span>
+      )}
+
+      {/* Actions */}
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+        <button onClick={onToggleFav} title={isFav ? 'Retirer favoris' : 'Favoris'}
+          className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
+          style={{ color: isFav ? '#D97706' : 'var(--text-3)', background: isFav ? '#FEF3C7' : 'transparent' }}
+          onMouseEnter={e => { e.currentTarget.style.color = '#D97706'; e.currentTarget.style.background = '#FEF3C7'; }}
+          onMouseLeave={e => { e.currentTarget.style.color = isFav ? '#D97706' : 'var(--text-3)'; e.currentTarget.style.background = isFav ? '#FEF3C7' : 'transparent'; }}>
+          <IconStar filled={isFav} />
+        </button>
+        {isAdmin && project.status === 'active' && (
+          <button onClick={onArchive} disabled={isArchiving} title="Archiver"
+            className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
+            style={{ color: 'var(--text-3)', background: 'transparent' }}
+            onMouseEnter={e => { e.currentTarget.style.color = '#B45309'; e.currentTarget.style.background = '#FEF9C3'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-3)'; e.currentTarget.style.background = 'transparent'; }}>
+            {isArchiving ? <span className="w-3.5 h-3.5 border-2 border-t-current rounded-full animate-spin" /> : <IconArchive />}
+          </button>
+        )}
+        {isAdmin && (
+          <button onClick={onDelete} disabled={isDeleting} title={t('common.delete')}
+            className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
+            style={{ color: 'var(--text-3)', background: 'transparent' }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'var(--danger)'; e.currentTarget.style.background = 'var(--danger-bg)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-3)'; e.currentTarget.style.background = 'transparent'; }}>
+            {isDeleting ? <span className="w-3.5 h-3.5 border-2 border-t-current rounded-full animate-spin" /> : <IconTrash />}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -573,7 +869,7 @@ function Stat({ n, label, color }) {
   );
 }
 
-/* ── Skeleton ───────────────────────────────────────────────────── */
+/* ── Skeletons ──────────────────────────────────────────────────── */
 function SkeletonGrid() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -585,6 +881,24 @@ function SkeletonGrid() {
             <div className="skeleton h-3 rounded w-full" />
             <div className="skeleton h-3 rounded w-2/3" />
           </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+function SkeletonList() {
+  return (
+    <div className="flex flex-col gap-2">
+      {[...Array(6)].map((_, i) => (
+        <div key={i} className="flex items-center gap-4 px-5 py-4 rounded-2xl border"
+          style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+          <div className="skeleton w-9 h-9 rounded-xl shrink-0" />
+          <div className="flex-1 space-y-2">
+            <div className="skeleton h-4 rounded w-1/3" />
+            <div className="skeleton h-3 rounded w-2/3" />
+          </div>
+          <div className="skeleton h-3 rounded w-16 hidden sm:block" />
+          <div className="skeleton h-6 rounded-full w-20 hidden md:block" />
         </div>
       ))}
     </div>

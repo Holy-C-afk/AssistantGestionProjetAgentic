@@ -26,7 +26,8 @@ public class GetMyProjectsHandler : IRequestHandler<GetMyProjectsQuery, PagedRes
                 var member = p.Members.FirstOrDefault(m => m.UserId == request.UserId);
                 var role   = member?.Role ?? (p.OwnerId == request.UserId ? "admin" : "member");
                 return new ProjectDto(
-                    p.Id, p.Name, p.Description, p.OwnerId, p.Status, p.CreatedAt,
+                    p.Id, p.Name, p.Description, p.OwnerId, p.Status,
+                    p.CreatedAt, p.UpdatedAt,
                     p.Members.Count, role,
                     p.Sprints.Count,
                     p.Tasks.Count,
