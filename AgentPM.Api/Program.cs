@@ -27,6 +27,9 @@ builder.Services.AddSingleton<IEmailService, SmtpEmailService>();
 builder.Services.AddSingleton<SprintDeadlineMonitor>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<SprintDeadlineMonitor>());
 
+// ── Notification service ──────────────────────────────────
+builder.Services.AddScoped<NotificationService>();
+
 // ── Database ──────────────────────────────────────────────
 builder.Services.AddDbContext<AppDbContext>(options =>
     options
@@ -102,6 +105,7 @@ var app = builder.Build();
 app.UseCors("Frontend");
 app.MapControllers();
 app.MapHub<AgentHub>("/hubs/agent");
+app.MapHub<NotificationHub>("/hubs/notifications");
 
 // ── Auto-migration ────────────────────────────────────────
 using (var scope = app.Services.CreateScope())
@@ -120,6 +124,10 @@ using (var scope = app.Services.CreateScope())
     // Ensure PhotoUrl column exists on Users
     await db.Database.ExecuteSqlRawAsync(
         "ALTER TABLE \"Users\" ADD COLUMN IF NOT EXISTS \"PhotoUrl\" text NULL;");
+
+    // Ensure UpdatedAt exists on tasks
+    await db.Database.ExecuteSqlRawAsync(
+        "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS \"UpdatedAt\" timestamptz NOT NULL DEFAULT NOW();");
 
     // Migrate legacy 'owner' role → 'admin' (Chef de projet) — idempotent
     await db.Database.ExecuteSqlRawAsync(

@@ -25,6 +25,7 @@ public class AppDbContext : DbContext
     public DbSet<AgentMessage> AgentMessages => Set<AgentMessage>();
     public DbSet<TaskEmbedding> TaskEmbeddings => Set<TaskEmbedding>();
     public DbSet<EventStoreEntry> EventStores => Set<EventStoreEntry>();
+    public DbSet<Notification> Notifications => Set<Notification>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -113,6 +114,14 @@ public class AppDbContext : DbContext
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.AggregateId, x.Version }).IsUnique();
             e.Property(x => x.Payload).HasColumnType("jsonb");
+        });
+
+        modelBuilder.Entity<Notification>(e =>
+        {
+            e.ToTable("notifications");
+            e.HasKey(x => x.Id);
+            e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => new { x.UserId, x.IsRead });
         });
     }
 }

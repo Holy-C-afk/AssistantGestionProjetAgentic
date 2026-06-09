@@ -9,6 +9,8 @@ import SprintSelector from '../components/SprintSelector';
 import KanbanBoard from '../components/KanbanBoard';
 import TaskDetailModal from '../components/TaskDetailModal';
 import AgentPanel from '../components/AgentPanel';
+import TimelineTab from '../components/TimelineTab';
+import MultiSprintView from '../components/MultiSprintView';
 
 /* ── SVG icons ─────────────────────────────────────────────────── */
 const IconArrow = () => (
@@ -260,8 +262,10 @@ export default function ProjectDetailPage() {
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex gap-0">
             {[
-              { k: 'board',   l: t('project.tabs.board') },
-              { k: 'members', l: t('project.tabs.members', { count: members.length }) },
+              { k: 'board',     l: t('project.tabs.board') },
+              { k: 'timeline',  l: 'Timeline' },
+              { k: 'multisp',   l: 'Multi-sprint' },
+              { k: 'members',   l: t('project.tabs.members', { count: members.length }) },
             ].map(tabItem => (
               <button key={tabItem.k}
                 onClick={() => setTab(tabItem.k)}
@@ -303,6 +307,17 @@ export default function ProjectDetailPage() {
               />
             </div>
           </div>
+        )}
+
+        {tab === 'timeline' && (
+          <TimelineTab
+            projectId={id}
+            onSelectSprint={(sid) => { setSelectedSprintId(sid); setTab('board'); }}
+          />
+        )}
+
+        {tab === 'multisp' && (
+          <MultiSprintView projectId={id} />
         )}
 
         {tab === 'members' && (

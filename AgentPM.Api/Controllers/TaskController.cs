@@ -742,6 +742,20 @@ public class TaskController : ControllerBase
         return File(pdf, "application/pdf", $"tache-{fileName}.pdf");
     }
 
+    // PATCH /api/tasks/{id}/sprint  — move task to another sprint (or backlog)
+    [HttpPatch("{id:guid}/sprint")]
+    public async Task<IActionResult> ChangeSprint(Guid id, [FromBody] ChangeSprintRequest request)
+    {
+        var task = await _db.Tasks.FindAsync(id);
+        if (task is null) return NotFound();
+
+        task.SprintId  = request.SprintId;
+        task.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        return Ok(new { task.Id, task.SprintId });
+    }
+
     private async Task<TaskDto> ToDto(Guid id)
     {
         var t = await _db.Tasks.AsNoTracking()

@@ -29,6 +29,9 @@ export const addTaskComment = (id, content, authorId) =>
 export const deleteTaskComment = (taskId, commentId) =>
   api.delete(`/tasks/${taskId}/comments/${commentId}`).then(r => r.data);
 
+export const changeTaskSprint = (taskId, sprintId) =>
+  api.patch(`/tasks/${taskId}/sprint`, { sprintId: sprintId ?? null }).then(r => r.data);
+
 export const exportTaskPdf = async (taskId, taskTitle) => {
   const res = await api.get(`/tasks/${taskId}/pdf`, { responseType: 'blob' });
   const url = URL.createObjectURL(res.data);

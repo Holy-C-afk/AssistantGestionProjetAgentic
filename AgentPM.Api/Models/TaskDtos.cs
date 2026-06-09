@@ -53,3 +53,5 @@ public record TaskCommentDto(
     DateTime CreatedAt);
 
 public record AddCommentRequest(string Content, Guid? AuthorId);
+
+public record ChangeSprintRequest(Guid? SprintId);

@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { graphRequest } from '../auth/authConfig';
 import { fetchAndStorePhoto } from '../utils/graphPhoto';
 import { useAuth } from '../auth/useAuth';
+import NotificationCenter from './NotificationCenter';
 
 export default function Navbar() {
   const { pathname }           = useLocation();
@@ -80,11 +81,15 @@ export default function Navbar() {
 
         {/* Nav links */}
         <div className="flex gap-0.5">
-          <NavLink to="/" active={pathname === '/'}>{t('nav.projects')}</NavLink>
+          <NavLink to="/"          active={pathname === '/'}>{t('nav.projects')}</NavLink>
+          <NavLink to="/dashboard" active={pathname === '/dashboard'}>Dashboard</NavLink>
         </div>
 
         {/* Right side */}
         <div className="ml-auto flex items-center gap-2">
+
+          {/* Notification bell */}
+          <NotificationCenter />
 
           {/* Language toggle */}
           <button

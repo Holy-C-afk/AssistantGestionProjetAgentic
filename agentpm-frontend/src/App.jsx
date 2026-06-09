@@ -5,6 +5,7 @@ import AuthGuard from './components/AuthGuard';
 import Navbar from './components/Navbar';
 import ProjectsPage from './pages/ProjectsPage';
 import ProjectDetailPage from './pages/ProjectDetailPage';
+import DashboardPage from './pages/DashboardPage';
 import { ToastProvider } from './context/ToastContext';
 
 export default function App() {
@@ -15,7 +16,8 @@ export default function App() {
           <ToastProvider>
             <Navbar />
             <Routes>
-              <Route path="/" element={<ProjectsPage />} />
+              <Route path="/"              element={<ProjectsPage />} />
+              <Route path="/dashboard"    element={<DashboardPage />} />
               <Route path="/projects/:id" element={<ProjectDetailPage />} />
             </Routes>
           </ToastProvider>
