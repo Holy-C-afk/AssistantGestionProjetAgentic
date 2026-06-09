@@ -21,10 +21,9 @@ public class AgentHub : Hub
     // ── Simple streaming chat (no tool loop) ─────────────────────────────────
     public async Task StreamChat(string message, string? conversationId)
     {
-        var userId = GetUserId();
+        var hasConv = Guid.TryParse(conversationId, out var convId);
 
-        // Persist user message if we have a conversation
-        if (Guid.TryParse(conversationId, out var convId) && userId.HasValue)
+        if (hasConv)
             await _mediator.Send(new AppendMessageCommand(convId, "user", message));
 
         var sb = new System.Text.StringBuilder();
@@ -37,19 +36,20 @@ public class AgentHub : Hub
 
         await Clients.Caller.SendAsync("StreamDone");
 
-        // Persist assistant reply
-        if (Guid.TryParse(conversationId, out convId) && userId.HasValue)
+        if (hasConv && sb.Length > 0)
             await _mediator.Send(new AppendMessageCommand(convId, "assistant", sb.ToString()));
     }
 
     // ── ReAct loop streaming (tool_use + tokens) ─────────────────────────────
     public async Task RunAgent(string message, string? projectId, string? conversationId, string? sprintId = null)
     {
-        var userId = GetUserId();
-        var pid = Guid.TryParse(projectId, out var g) ? g : (Guid?)null;
-        var sid = Guid.TryParse(sprintId, out var sg) ? sg : (Guid?)null;
+        var pid = Guid.TryParse(projectId,      out var g)  ? g  : (Guid?)null;
+        var sid = Guid.TryParse(sprintId,        out var sg) ? sg : (Guid?)null;
+        // The conversation was already created via REST with the correct userId.
+        // We only need a valid conversationId to persist messages — no userId re-check needed.
+        var hasConv = Guid.TryParse(conversationId, out var convId);
 
-        if (Guid.TryParse(conversationId, out var convId) && userId.HasValue)
+        if (hasConv)
             await _mediator.Send(new AppendMessageCommand(convId, "user", message));
 
         var sb = new System.Text.StringBuilder();
@@ -61,33 +61,28 @@ public class AgentHub : Hub
                 case AgentStreamEventKind.ThinkingStart:
                     await Clients.Caller.SendAsync("AgentThinking");
                     break;
-
                 case AgentStreamEventKind.ToolCall:
                     await Clients.Caller.SendAsync("AgentToolCall",
                         new { tool = evt.ToolName, input = evt.Data });
                     break;
-
                 case AgentStreamEventKind.ToolResult:
                     await Clients.Caller.SendAsync("AgentToolResult",
                         new { tool = evt.ToolName, result = evt.Data });
                     break;
-
                 case AgentStreamEventKind.Token:
                     sb.Append(evt.Data);
                     await Clients.Caller.SendAsync("ReceiveToken", evt.Data);
                     break;
-
                 case AgentStreamEventKind.Done:
                     await Clients.Caller.SendAsync("StreamDone");
                     break;
-
                 case AgentStreamEventKind.Error:
                     await Clients.Caller.SendAsync("AgentError", evt.Data);
                     break;
             }
         }, Context.ConnectionAborted);
 
-        if (Guid.TryParse(conversationId, out convId) && userId.HasValue && sb.Length > 0)
+        if (hasConv && sb.Length > 0)
             await _mediator.Send(new AppendMessageCommand(convId, "assistant", sb.ToString()));
     }
 
