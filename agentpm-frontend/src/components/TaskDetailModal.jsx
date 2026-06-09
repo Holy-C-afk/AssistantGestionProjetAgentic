@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { getTask, updateTask, deleteTask, getTaskComments, addTaskComment, deleteTaskComment, createTask, exportTaskPdf } from '../api/taskApi';
 import { agentEstimate, agentDecompose } from '../api/agentApi';
-import { sendMailViaGraph } from '../api/emailApi';
-import { buildAssignmentEmail } from '../utils/emailTemplates';
+// Email is now sent server-side via SMTP in TaskController
 
 export default function TaskDetailModal({ taskId, members = [], isAdmin = true, onClose, onUpdated, onAutoRefresh }) {
+  const currentUserId = sessionStorage.getItem('userId');
+
   const [task, setTask]         = useState(null);
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
@@ -31,12 +32,17 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
     Promise.all([getTask(taskId), getTaskComments(taskId)])
       .then(([t, c]) => {
         setTask(t);
+        // Build effective assignee list (multi-assignee)
+        const effectiveIds = (t.assigneeIds && t.assigneeIds.length > 0)
+          ? t.assigneeIds
+          : (t.assigneeId ? [t.assigneeId] : []);
+
         setForm({
           title: t.title,
           description: t.description || '',
           priority: t.priority,
           storyPoints: t.storyPoints ?? '',
-          assigneeId: t.assigneeId || '',
+          assigneeIds: effectiveIds,
           tags: t.tags ?? [],
         });
         setComments(c);
@@ -53,25 +59,15 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
         description: form.description,
         priority:    form.priority,
         storyPoints: form.storyPoints === '' ? null : parseInt(form.storyPoints, 10),
-        assigneeId:  form.assigneeId || null,
+        assigneeIds: form.assigneeIds ?? [],
+        assigneeId:  form.assigneeIds?.[0] ?? null,
         tags:        form.tags ?? [],
       });
 
-      // Backend may return { task, emailNotification }
-      const updated  = result?.task ?? result;
-      const emailInfo = result?.emailNotification;
+      // Backend returns { task } and sends the assignment email directly via SMTP
+      const updated = result?.task ?? result;
       setTask(updated);
       onUpdated?.();
-
-      // Send assignment email via Graph API (no password needed — uses MSAL token)
-      if (emailInfo?.to) {
-        const { to, assigneeName, taskTitle, taskDesc, taskPrio,
-                projectName, sprintName, assignerName } = emailInfo;
-        const subject = `📋 Nouvelle tâche assignée : ${taskTitle}`;
-        const html    = buildAssignmentEmail(assigneeName, taskTitle, taskDesc,
-                                             taskPrio, projectName, sprintName, assignerName);
-        sendMailViaGraph(to, subject, html); // fire-and-forget
-      }
     } catch (e) { console.error(e); }
     finally { setSaving(false); }
   };
@@ -96,7 +92,8 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
     e.preventDefault();
     if (!newComment.trim()) return;
     try {
-      const c = await addTaskComment(taskId, newComment.trim());
+      const authorId = sessionStorage.getItem('userId');
+      const c = await addTaskComment(taskId, newComment.trim(), authorId);
       setComments([...comments, c]);
       setNewComment('');
     } catch (e) { console.error(e); }
@@ -151,6 +148,17 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
       if (!createdIdx.has(i)) await handleCreateSubTask(subTasks[i], i);
   };
 
+  // canEdit: chef de projet (isAdmin) OR a collaborateur explicitly assigned to this task
+  const canEdit = isAdmin || (form?.assigneeIds ?? []).includes(currentUserId);
+
+  // Toggle one assignee in/out of the multi-assignee list (admin only UI, but defined here)
+  const toggleAssignee = (uid) => {
+    setForm(f => {
+      const cur = f.assigneeIds ?? [];
+      return { ...f, assigneeIds: cur.includes(uid) ? cur.filter(id => id !== uid) : [...cur, uid] };
+    });
+  };
+
   if (!taskId) return null;
 
   return (
@@ -169,34 +177,48 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
 
             {/* Form */}
             <div className="p-6 space-y-5">
-              {/* Role badge for collaborateurs */}
-              {!isAdmin && (
+
+              {/* Read-only banner for non-assigned collaborateurs */}
+              {!canEdit && (
                 <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 text-xs px-3 py-2 rounded-lg">
                   <span>👁️</span>
-                  <span>Mode lecture — seuls les chefs de projet peuvent modifier les tâches.</span>
+                  <span>Mode lecture — vous n'êtes pas assigné à cette tâche.</span>
                 </div>
               )}
 
+              {/* Title */}
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Titre</label>
-                <input value={form.title} onChange={e => isAdmin && setForm({ ...form, title: e.target.value })}
-                  readOnly={!isAdmin}
-                  className={`w-full border rounded-lg px-3 py-2 text-lg font-semibold focus:outline-none ${isAdmin ? 'border-gray-300 focus:ring-2 focus:ring-indigo-500' : 'border-gray-200 bg-gray-50 text-gray-600 cursor-default'}`} />
+                <input
+                  value={form.title}
+                  onChange={e => canEdit && setForm({ ...form, title: e.target.value })}
+                  readOnly={!canEdit}
+                  className={`w-full border rounded-lg px-3 py-2 text-lg font-semibold focus:outline-none ${canEdit ? 'border-gray-300 focus:ring-2 focus:ring-indigo-500' : 'border-gray-200 bg-gray-50 text-gray-600 cursor-default'}`}
+                />
               </div>
 
+              {/* Description */}
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Description</label>
-                <textarea value={form.description} onChange={e => isAdmin && setForm({ ...form, description: e.target.value })}
-                  readOnly={!isAdmin}
-                  rows={4} className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none ${isAdmin ? 'border-gray-300 focus:ring-2 focus:ring-indigo-500' : 'border-gray-200 bg-gray-50 text-gray-600 cursor-default'}`} />
+                <textarea
+                  value={form.description}
+                  onChange={e => canEdit && setForm({ ...form, description: e.target.value })}
+                  readOnly={!canEdit}
+                  rows={4}
+                  className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none ${canEdit ? 'border-gray-300 focus:ring-2 focus:ring-indigo-500' : 'border-gray-200 bg-gray-50 text-gray-600 cursor-default'}`}
+                />
               </div>
 
+              {/* Priority / Story Points / Status */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Priorité</label>
-                  <select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}
+                  <select
+                    value={form.priority}
+                    onChange={e => setForm({ ...form, priority: e.target.value })}
                     disabled={!isAdmin}
-                    className={`w-full border rounded-lg px-3 py-2 text-sm ${!isAdmin ? 'bg-gray-50 text-gray-600 cursor-default border-gray-200' : 'border-gray-300'}`}>
+                    className={`w-full border rounded-lg px-3 py-2 text-sm ${!isAdmin ? 'bg-gray-50 text-gray-600 cursor-default border-gray-200' : 'border-gray-300'}`}
+                  >
                     <option value="low">Basse</option>
                     <option value="medium">Moyenne</option>
                     <option value="high">Haute</option>
@@ -204,20 +226,20 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
                   </select>
                 </div>
 
-                {/* Story Points + AI Estimate */}
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Story Points</label>
                   <div className="flex gap-2">
-                    <input type="number" min="0" max="100" value={form.storyPoints}
-                      onChange={e => isAdmin && setForm({ ...form, storyPoints: e.target.value })}
-                      readOnly={!isAdmin}
-                      className={`flex-1 border rounded-lg px-3 py-2 text-sm ${!isAdmin ? 'bg-gray-50 text-gray-600 cursor-default border-gray-200' : 'border-gray-300'}`} />
+                    <input
+                      type="number" min="0" max="100"
+                      value={form.storyPoints}
+                      onChange={e => canEdit && setForm({ ...form, storyPoints: e.target.value })}
+                      readOnly={!canEdit}
+                      className={`flex-1 border rounded-lg px-3 py-2 text-sm ${!canEdit ? 'bg-gray-50 text-gray-600 cursor-default border-gray-200' : 'border-gray-300'}`}
+                    />
                     {isAdmin && (
                       <button type="button" onClick={handleEstimate} disabled={estimating} title="Estimation IA"
                         className="bg-indigo-50 text-indigo-600 border border-indigo-200 px-2.5 rounded-lg text-sm hover:bg-indigo-100 disabled:opacity-50 transition whitespace-nowrap">
-                        {estimating
-                          ? <span className="inline-block w-4 h-4 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin" />
-                          : '🤖 Estimer'}
+                        {estimating ? <span className="inline-block w-4 h-4 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin" /> : '🤖 Estimer'}
                       </button>
                     )}
                   </div>
@@ -230,41 +252,55 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
                 </div>
               </div>
 
+              {/* ── Multi-assignee ── */}
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Assigné à</label>
-                {isAdmin ? (
-                  members.length > 0 ? (
-                    <select
-                      value={form.assigneeId}
-                      onChange={e => setForm({ ...form, assigneeId: e.target.value })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    >
-                      <option value="">— Non assigné —</option>
-                      {members.map(m => (
-                        <option key={m.userId} value={m.userId}>
-                          {m.fullName} ({m.email})
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      value={form.assigneeId}
-                      onChange={e => setForm({ ...form, assigneeId: e.target.value })}
-                      placeholder="UUID utilisateur"
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  )
+                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">
+                  Assigné à{' '}
+                  {form.assigneeIds?.length > 0 && (
+                    <span className="normal-case font-normal text-indigo-600">
+                      ({form.assigneeIds.length} sélectionné{form.assigneeIds.length > 1 ? 's' : ''})
+                    </span>
+                  )}
+                </label>
+                {isAdmin && members.length > 0 ? (
+                  <div className="border border-gray-200 rounded-lg overflow-hidden max-h-40 overflow-y-auto">
+                    {members.map(m => {
+                      const checked = (form.assigneeIds ?? []).includes(m.userId);
+                      return (
+                        <label key={m.userId}
+                          className={`flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-indigo-50 transition ${checked ? 'bg-indigo-50/60' : ''}`}>
+                          <input type="checkbox" checked={checked}
+                            onChange={() => toggleAssignee(m.userId)}
+                            className="accent-indigo-600 w-4 h-4" />
+                          <div className="w-7 h-7 rounded-full bg-indigo-500 text-white text-xs font-bold flex items-center justify-center shrink-0">
+                            {m.fullName?.charAt(0)?.toUpperCase() ?? '?'}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-800 truncate">{m.fullName}</p>
+                            <p className="text-xs text-gray-400 truncate">{m.email}</p>
+                          </div>
+                          {checked && <span className="text-indigo-500 text-xs font-semibold shrink-0">✓</span>}
+                        </label>
+                      );
+                    })}
+                  </div>
                 ) : (
-                  <input value={task.assigneeName || '— Non assigné —'} readOnly
-                    className="w-full border border-gray-200 bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-600 cursor-default" />
+                  <div className="flex flex-wrap gap-1.5">
+                    {(task.assigneeNames ?? (task.assigneeName ? [task.assigneeName] : [])).length > 0
+                      ? (task.assigneeNames ?? [task.assigneeName]).map((n, i) => (
+                          <span key={i} className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 px-2.5 py-1 rounded-full font-medium">
+                            {n}
+                          </span>
+                        ))
+                      : <span className="text-sm text-gray-400 italic">Non assigné</span>
+                    }
+                  </div>
                 )}
               </div>
 
               {/* ── Tags ── */}
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Tags</label>
-
-                {/* Existing tags */}
                 {form?.tags?.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mb-2">
                     {form.tags.map((tag, i) => {
@@ -280,50 +316,40 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
                         <span key={i} className={`inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full border font-medium ${palette[i % palette.length]}`}>
                           {tag}
                           {isAdmin && (
-                            <button
-                              type="button"
+                            <button type="button"
                               onClick={() => setForm(f => ({ ...f, tags: f.tags.filter((_, j) => j !== i) }))}
-                              className="hover:opacity-70 leading-none"
-                            >×</button>
+                              className="hover:opacity-70 leading-none">×</button>
                           )}
                         </span>
                       );
                     })}
                   </div>
                 )}
-
-                {/* Add tag input — admins only */}
                 {isAdmin && (
                   <>
                     <div className="flex gap-2">
-                      <input
-                        type="text"
-                        placeholder="Ajouter un tag..."
+                      <input type="text" placeholder="Ajouter un tag..."
                         value={tagInput}
                         onChange={e => setTagInput(e.target.value)}
                         onKeyDown={e => {
                           if ((e.key === 'Enter' || e.key === ',') && tagInput.trim()) {
                             e.preventDefault();
                             const newTag = tagInput.trim().replace(/,$/, '');
-                            if (newTag && !form.tags.includes(newTag)) {
+                            if (newTag && !form.tags.includes(newTag))
                               setForm(f => ({ ...f, tags: [...f.tags, newTag] }));
-                            }
                             setTagInput('');
                           }
                         }}
                         className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       />
-                      <button
-                        type="button"
+                      <button type="button"
                         onClick={() => {
                           const newTag = tagInput.trim();
-                          if (newTag && !form.tags.includes(newTag)) {
+                          if (newTag && !form.tags.includes(newTag))
                             setForm(f => ({ ...f, tags: [...f.tags, newTag] }));
-                          }
                           setTagInput('');
                         }}
-                        className="bg-gray-100 text-gray-700 px-3 py-2 rounded-lg text-sm hover:bg-gray-200 border border-gray-300"
-                      >
+                        className="bg-gray-100 text-gray-700 px-3 py-2 rounded-lg text-sm hover:bg-gray-200 border border-gray-300">
                         + Ajouter
                       </button>
                     </div>
@@ -335,8 +361,9 @@ export default function TaskDetailModal({ taskId, members = [], isAdmin = true, 
                 )}
               </div>
 
+              {/* ── Action buttons ── */}
               <div className="flex gap-3 pt-2 flex-wrap">
-                {isAdmin && (
+                {canEdit && (
                   <button onClick={handleSave} disabled={saving}
                     className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-indigo-700 disabled:opacity-50">
                     {saving ? 'Enregistrement...' : 'Enregistrer'}

@@ -19,6 +19,9 @@ public class GetProjectByIdHandler : IRequestHandler<GetProjectByIdQuery, Projec
         var aggregate = await _repo.GetByIdAsync(request.ProjectId, ct)
             ?? throw new KeyNotFoundException($"Project {request.ProjectId} not found.");
 
+        var member = aggregate.Project.Members.FirstOrDefault(m => m.UserId == request.UserId);
+        var role   = member?.Role ?? (aggregate.Project.OwnerId == request.UserId ? "admin" : "member");
+
         return new ProjectDto(
             aggregate.Project.Id,
             aggregate.Project.Name,
@@ -26,7 +29,8 @@ public class GetProjectByIdHandler : IRequestHandler<GetProjectByIdQuery, Projec
             aggregate.Project.OwnerId,
             aggregate.Project.Status,
             aggregate.Project.CreatedAt,
-            aggregate.Project.Members.Count
+            aggregate.Project.Members.Count,
+            role
         );
     }
 }

@@ -21,9 +21,14 @@ public class GetMyProjectsHandler : IRequestHandler<GetMyProjectsQuery, PagedRes
             request.UserId, request.Page, request.PageSize, request.Search, request.Status, ct);
 
         return new PagedResult<ProjectDto>(
-            items.Select(p => new ProjectDto(
-                p.Id, p.Name, p.Description, p.OwnerId, p.Status, p.CreatedAt, p.Members.Count
-            )).ToList(),
+            items.Select(p =>
+            {
+                var member = p.Members.FirstOrDefault(m => m.UserId == request.UserId);
+                var role   = member?.Role ?? (p.OwnerId == request.UserId ? "admin" : "member");
+                return new ProjectDto(
+                    p.Id, p.Name, p.Description, p.OwnerId, p.Status, p.CreatedAt, p.Members.Count, role
+                );
+            }).ToList(),
             total
         );
     }

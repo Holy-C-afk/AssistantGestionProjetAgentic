@@ -50,13 +50,14 @@ function resolvePhoto(task) {
 
 /* ─────────────────────────────────────────────────────── */
 
-export default function TaskCard({ task, onClick, onPriorityChanged }) {
+export default function TaskCard({ task, onClick, onPriorityChanged, isAdmin = true }) {
   const isDone = task.status === 'done';
 
+  // Collaborateurs cannot drag tasks out of "done"; admins/chefs can always drag
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
     data: { task },
-    disabled: isDone,   // tasks in "done" cannot be dragged
+    disabled: isDone && !isAdmin,
   });
 
   const [currentPriority, setCurrentPriority] = useState(task.priority);
@@ -72,10 +73,14 @@ export default function TaskCard({ task, onClick, onPriorityChanged }) {
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, zIndex: 100 }
     : undefined;
 
-  const prio    = PRIO_MAP[currentPriority] ?? PRIO_MAP.medium;
-  const tags    = task.tags ?? [];
-  const name    = task.assigneeName ?? '';
-  const photo   = resolvePhoto(task);
+  const prio      = PRIO_MAP[currentPriority] ?? PRIO_MAP.medium;
+  const tags      = task.tags ?? [];
+  // Multi-assignee: prefer assigneeNames[] when available, fall back to primary
+  const assigneeNames = (task.assigneeNames && task.assigneeNames.length > 0)
+    ? task.assigneeNames
+    : (task.assigneeName ? [task.assigneeName] : []);
+  const name      = assigneeNames[0] ?? '';
+  const photo     = resolvePhoto(task);
 
   /* Change priority inline */
   const handlePrioritySelect = async (key) => {
@@ -102,7 +107,7 @@ export default function TaskCard({ task, onClick, onPriorityChanged }) {
       onClick={() => { if (!isDragging) onClick?.(task); }}
       className={`group relative bg-white rounded-lg border p-3 mb-2 shadow-sm transition-shadow ${
         isDone
-          ? 'border-green-200 bg-green-50/30 cursor-default opacity-80'
+          ? `border-green-200 bg-green-50/30 opacity-80 ${isAdmin ? 'cursor-grab active:cursor-grabbing hover:shadow-md' : 'cursor-default'}`
           : 'border-gray-200 hover:shadow-md cursor-grab active:cursor-grabbing'
       } ${isDragging ? 'opacity-50' : ''}`}
     >
@@ -156,40 +161,49 @@ export default function TaskCard({ task, onClick, onPriorityChanged }) {
       {/* ── Footer ── */}
       <div className="flex items-center justify-between gap-2 mt-2">
 
-        {/* Priority — click to change */}
+        {/* Priority — clickable dropdown for admins, read-only badge for collaborateurs */}
         <div className="relative">
-          <button
-            onPointerDown={e => e.stopPropagation()}
-            onClick={e => { e.stopPropagation(); setShowPrioMenu(v => !v); }}
-            disabled={saving}
-            className={`text-xs px-2 py-0.5 rounded-full font-medium border transition hover:opacity-80 flex items-center gap-1 ${prio.cls}`}
-            title="Changer la priorité"
-          >
-            {prio.label}
-            <svg className="w-2.5 h-2.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
+          {isAdmin ? (
+            <>
+              <button
+                onPointerDown={e => e.stopPropagation()}
+                onClick={e => { e.stopPropagation(); setShowPrioMenu(v => !v); }}
+                disabled={saving}
+                className={`text-xs px-2 py-0.5 rounded-full font-medium border transition hover:opacity-80 flex items-center gap-1 ${prio.cls}`}
+                title="Changer la priorité"
+              >
+                {prio.label}
+                <svg className="w-2.5 h-2.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
 
-          {showPrioMenu && (
-            <div
-              onPointerDown={e => e.stopPropagation()}
-              className="absolute bottom-full mb-1 left-0 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 min-w-[120px]"
-            >
-              {PRIORITIES.map(p => (
-                <button
-                  key={p.key}
-                  onClick={e => { e.stopPropagation(); handlePrioritySelect(p.key); }}
-                  className={`w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-gray-50 flex items-center gap-2 transition ${
-                    p.key === currentPriority ? 'opacity-40 cursor-default' : ''
-                  }`}
+              {showPrioMenu && (
+                <div
+                  onPointerDown={e => e.stopPropagation()}
+                  className="absolute bottom-full mb-1 left-0 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 min-w-[120px]"
                 >
-                  <span className={`w-2 h-2 rounded-full ${p.cls.split(' ')[0]}`} />
-                  {p.label}
-                  {p.key === currentPriority && <span className="ml-auto">✓</span>}
-                </button>
-              ))}
-            </div>
+                  {PRIORITIES.map(p => (
+                    <button
+                      key={p.key}
+                      onClick={e => { e.stopPropagation(); handlePrioritySelect(p.key); }}
+                      className={`w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-gray-50 flex items-center gap-2 transition ${
+                        p.key === currentPriority ? 'opacity-40 cursor-default' : ''
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full ${p.cls.split(' ')[0]}`} />
+                      {p.label}
+                      {p.key === currentPriority && <span className="ml-auto">✓</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            // Collaborateur : read-only priority badge, no dropdown
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${prio.cls}`}>
+              {prio.label}
+            </span>
           )}
         </div>
 
@@ -218,24 +232,40 @@ export default function TaskCard({ task, onClick, onPriorityChanged }) {
             </span>
           )}
 
-          {/* Assignee — real photo or colored avatar */}
-          {name && (
-            photo ? (
-              <img
-                src={photo}
-                alt={name}
-                title={name}
-                className="w-6 h-6 rounded-full object-cover ring-2 ring-white shadow-sm shrink-0"
-                onError={e => { e.currentTarget.style.display = 'none'; }}
-              />
-            ) : (
-              <span
-                title={name}
-                className={`w-6 h-6 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0 ring-2 ring-white shadow-sm ${avatarColor(name)}`}
-              >
-                {initials(name)}
-              </span>
-            )
+          {/* Assignees — stacked avatars (up to 3 + overflow badge) */}
+          {assigneeNames.length > 0 && (
+            <div className="flex items-center -space-x-1.5">
+              {assigneeNames.slice(0, 3).map((n, i) => {
+                // First assignee may have a photo
+                const imgSrc = i === 0 ? photo : null;
+                return imgSrc ? (
+                  <img
+                    key={i}
+                    src={imgSrc}
+                    alt={n}
+                    title={n}
+                    className="w-6 h-6 rounded-full object-cover ring-2 ring-white shadow-sm shrink-0"
+                    onError={e => { e.currentTarget.style.display = 'none'; }}
+                  />
+                ) : (
+                  <span
+                    key={i}
+                    title={n}
+                    className={`w-6 h-6 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0 ring-2 ring-white shadow-sm ${avatarColor(n)}`}
+                  >
+                    {initials(n)}
+                  </span>
+                );
+              })}
+              {assigneeNames.length > 3 && (
+                <span
+                  title={assigneeNames.slice(3).join(', ')}
+                  className="w-6 h-6 rounded-full bg-gray-200 text-gray-600 text-[10px] font-bold flex items-center justify-center shrink-0 ring-2 ring-white shadow-sm"
+                >
+                  +{assigneeNames.length - 3}
+                </span>
+              )}
+            </div>
           )}
         </div>
       </div>

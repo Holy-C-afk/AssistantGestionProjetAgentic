@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getMyProjects, createProject } from '../api/projectApi';
+import { getMyProjects, createProject, deleteProject } from '../api/projectApi';
 
 const PAGE_SIZE = 9;
 
@@ -80,11 +80,13 @@ export default function ProjectsPage() {
   const [search,      setSearch]      = useState('');
   const [status,      setStatus]      = useState('');
   const [searchInput, setSearchInput] = useState('');
-  const [showModal,   setShowModal]   = useState(false);
-  const [form,        setForm]        = useState({ name: '', description: '' });
-  const [loading,     setLoading]     = useState(false);
-  const [fetching,    setFetching]    = useState(true);
-  const [error,       setError]       = useState('');
+  const [showModal,    setShowModal]    = useState(false);
+  const [form,         setForm]         = useState({ name: '', description: '' });
+  const [loading,      setLoading]      = useState(false);
+  const [fetching,     setFetching]     = useState(true);
+  const [error,        setError]        = useState('');
+  const [deletingId,   setDeletingId]   = useState(null);   // project being deleted
+  const [confirmId,    setConfirmId]    = useState(null);   // project awaiting confirmation
 
   const totalPages     = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const activeCount    = projects.filter(p => p.status === 'active').length;
@@ -122,6 +124,20 @@ export default function ProjectsPage() {
       await fetchProjects();
     } catch { setError('Erreur lors de la création du projet.'); }
     finally { setLoading(false); }
+  };
+
+  const handleDeleteConfirmed = async () => {
+    if (!confirmId) return;
+    setDeletingId(confirmId);
+    setConfirmId(null);
+    try {
+      await deleteProject(confirmId);
+      await fetchProjects();
+    } catch {
+      setError('Erreur lors de la suppression du projet.');
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
@@ -248,6 +264,8 @@ export default function ProjectsPage() {
                 key={project.id}
                 project={project}
                 onClick={() => navigate(`/projects/${project.id}`)}
+                onDelete={e => { e.stopPropagation(); setConfirmId(project.id); }}
+                isDeleting={deletingId === project.id}
               />
             ))}
           </div>
@@ -346,6 +364,50 @@ export default function ProjectsPage() {
         </div>
       )}
 
+      {/* ══ DELETE CONFIRM MODAL ══════════════════════════════════════════ */}
+      {confirmId && (
+        <div
+          className="fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onClick={() => setConfirmId(null)}
+        >
+          <div
+            className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden"
+            style={{ animation: 'popIn .22s cubic-bezier(.34,1.56,.64,1)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="bg-gradient-to-br from-red-500 to-rose-600 px-6 py-5 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-white">Supprimer le projet ?</h2>
+                <p className="text-red-200 text-xs mt-0.5">Cette action est irréversible</p>
+              </div>
+              <button
+                onClick={() => setConfirmId(null)}
+                className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center text-white text-xl leading-none transition"
+              >×</button>
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-gray-600 mb-6">
+                Tous les sprints, tâches et commentaires associés seront <strong>définitivement supprimés</strong>.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleDeleteConfirmed}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-xl text-sm font-semibold transition shadow-sm"
+                >
+                  Oui, supprimer
+                </button>
+                <button
+                  onClick={() => setConfirmId(null)}
+                  className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm hover:bg-gray-50 transition"
+                >
+                  Annuler
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         @keyframes popIn {
           from { opacity: 0; transform: scale(.92) translateY(12px); }
@@ -357,13 +419,14 @@ export default function ProjectsPage() {
 }
 
 // ─── Project card ────────────────────────────────────────────────────────────
-function ProjectCard({ project, onClick }) {
-  const grad   = accentClass(project.name);
-  const status = STATUS_CFG[project.status] ?? { label: project.status, bg: 'bg-gray-50', text: 'text-gray-600', dot: 'bg-gray-400' };
+function ProjectCard({ project, onClick, onDelete, isDeleting }) {
+  const grad     = accentClass(project.name);
+  const status   = STATUS_CFG[project.status] ?? { label: project.status, bg: 'bg-gray-50', text: 'text-gray-600', dot: 'bg-gray-400' };
   const initials = project.name.slice(0, 2).toUpperCase();
-  const date = project.createdAt
+  const date     = project.createdAt
     ? new Date(project.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })
     : null;
+  const isAdmin  = project.currentUserRole === 'admin' || project.currentUserRole === 'owner';
 
   return (
     <div
@@ -376,7 +439,24 @@ function ProjectCard({ project, onClick }) {
           style={{ backgroundImage: 'radial-gradient(white 1px, transparent 1px)', backgroundSize: '18px 18px' }} />
 
         {/* Status badge top-right */}
-        <div className="absolute top-3 right-3">
+        <div className="absolute top-3 right-3 flex items-center gap-2">
+          {/* Delete button — admin only */}
+          {isAdmin && (
+            <button
+              onClick={onDelete}
+              disabled={isDeleting}
+              title="Supprimer le projet"
+              className="w-7 h-7 rounded-full bg-white/20 hover:bg-red-500 flex items-center justify-center text-white transition opacity-0 group-hover:opacity-100"
+            >
+              {isDeleting
+                ? <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+              }
+            </button>
+          )}
           <span className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm ${status.bg} ${status.text}`}>
             <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} />
             {status.label}

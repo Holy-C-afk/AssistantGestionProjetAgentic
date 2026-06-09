@@ -79,12 +79,14 @@ public class TaskController : ControllerBase
         if (!string.IsNullOrWhiteSpace(status)) query = query.Where(t => t.Status == status);
         if (assigneeId.HasValue) query = query.Where(t => t.AssigneeId == assigneeId.Value);
 
-        // Role-based filtering: collaborateurs only see their own tasks
+        // Role-based filtering: collaborateurs only see tasks assigned to them
         if (projectId.HasValue && CurrentUserId != Guid.Empty)
         {
             var role = await GetProjectRoleAsync(projectId.Value, CurrentUserId);
             if (role == "member")
-                query = query.Where(t => t.AssigneeId == CurrentUserId);
+                query = query.Where(t =>
+                    t.AssigneeId == CurrentUserId ||
+                    t.AssigneeIds.Contains(CurrentUserId));
         }
 
         var tasks = await query
@@ -95,7 +97,9 @@ public class TaskController : ControllerBase
                 t.Status, t.Priority, t.StoryPoints,
                 t.AssigneeId, t.Assignee != null ? t.Assignee.FullName : null,
                 t.CreatedById, t.Order, t.CreatedAt, t.UpdatedAt,
-                t.Comments.Count, t.Tags, t.Assignee != null ? t.Assignee.PhotoUrl : null))
+                t.Comments.Count, t.Tags,
+                t.Assignee != null ? t.Assignee.PhotoUrl : null,
+                t.AssigneeIds, null))   // AssigneeNames resolved lazily
             .ToListAsync();
 
         return Ok(tasks);
@@ -105,18 +109,9 @@ public class TaskController : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id)
     {
-        var t = await _db.Tasks.AsNoTracking()
-            .Include(x => x.Assignee)
-            .FirstOrDefaultAsync(x => x.Id == id);
-        if (t is null) return NotFound();
-
-        var commentCount = await _db.TaskComments.CountAsync(c => c.TaskId == id);
-
-        return Ok(new TaskDto(
-            t.Id, t.ProjectId, t.SprintId, t.Title, t.Description,
-            t.Status, t.Priority, t.StoryPoints,
-            t.AssigneeId, t.Assignee?.FullName,
-            t.CreatedById, t.Order, t.CreatedAt, t.UpdatedAt, commentCount, t.Tags, t.Assignee?.PhotoUrl));
+        var exists = await _db.Tasks.AnyAsync(x => x.Id == id);
+        if (!exists) return NotFound();
+        return Ok(await ToDto(id));
     }
 
     // S3-4: CreateTask
@@ -126,25 +121,32 @@ public class TaskController : ControllerBase
         var projectExists = await _db.Projects.AnyAsync(p => p.Id == request.ProjectId);
         if (!projectExists) return BadRequest(new { message = "Projet introuvable." });
 
-        var creatorId = await GetSystemUserIdAsync();
+        // Use the logged-in user as creator; fall back to system only if header missing
+        var creatorId = CurrentUserId != Guid.Empty ? CurrentUserId : await GetSystemUserIdAsync();
 
         var maxOrder = await _db.Tasks
             .Where(t => t.ProjectId == request.ProjectId && t.Status == "todo")
             .MaxAsync(t => (int?)t.Order) ?? 0;
 
+        // Merge AssigneeId + AssigneeIds into a single canonical list
+        var assigneeIds = request.AssigneeIds?.Where(id => id != Guid.Empty).Distinct().ToList() ?? [];
+        if (request.AssigneeId.HasValue && !assigneeIds.Contains(request.AssigneeId.Value))
+            assigneeIds.Insert(0, request.AssigneeId.Value);
+
         var task = new TaskItem
         {
-            ProjectId = request.ProjectId,
-            SprintId = request.SprintId,
-            Title = request.Title,
+            ProjectId  = request.ProjectId,
+            SprintId   = request.SprintId,
+            Title      = request.Title,
             Description = request.Description,
-            Priority = request.Priority ?? "medium",
+            Priority   = request.Priority ?? "medium",
             StoryPoints = request.StoryPoints,
-            AssigneeId = request.AssigneeId,
+            AssigneeId  = assigneeIds.Count > 0 ? assigneeIds[0] : null,
+            AssigneeIds = assigneeIds,
             CreatedById = creatorId,
-            Order = maxOrder + 1,
+            Order  = maxOrder + 1,
             Status = "todo",
-            Tags = request.Tags ?? []
+            Tags   = request.Tags ?? []
         };
 
         _db.Tasks.Add(task);
@@ -192,14 +194,33 @@ public class TaskController : ControllerBase
         if (task is null) return NotFound();
 
         var previousAssigneeId = task.AssigneeId;
-        var assigneeChanged    = request.AssigneeId.HasValue && request.AssigneeId != task.AssigneeId;
-        object? emailNotification = null;
+        // Build canonical assignee list from the request
+        List<Guid>? newAssigneeIds = null;
+        if (request.AssigneeIds is not null)
+        {
+            newAssigneeIds = request.AssigneeIds.Where(id => id != Guid.Empty).Distinct().ToList();
+            // Also fold in the single AssigneeId if provided
+            if (request.AssigneeId.HasValue && !newAssigneeIds.Contains(request.AssigneeId.Value))
+                newAssigneeIds.Insert(0, request.AssigneeId.Value);
+        }
+        else if (request.AssigneeId.HasValue)
+        {
+            newAssigneeIds = [request.AssigneeId.Value];
+        }
+
+        var oldIds = task.AssigneeIds.ToHashSet();
+        var newIds = newAssigneeIds?.ToHashSet() ?? oldIds;
+        var assigneeChanged = newAssigneeIds is not null && !oldIds.SetEquals(newIds);
 
         if (!string.IsNullOrWhiteSpace(request.Title)) task.Title = request.Title;
         if (request.Description is not null) task.Description = request.Description;
         if (!string.IsNullOrWhiteSpace(request.Priority)) task.Priority = request.Priority;
         if (request.StoryPoints.HasValue) task.StoryPoints = request.StoryPoints.Value;
-        if (request.AssigneeId.HasValue) task.AssigneeId = request.AssigneeId.Value;
+        if (newAssigneeIds is not null)
+        {
+            task.AssigneeIds = newAssigneeIds;
+            task.AssigneeId  = newAssigneeIds.Count > 0 ? newAssigneeIds[0] : null;
+        }
         if (request.SprintId.HasValue) task.SprintId = request.SprintId.Value;
         if (request.Tags is not null) task.Tags = request.Tags;
 
@@ -210,25 +231,44 @@ public class TaskController : ControllerBase
             await _events.AppendAsync(task.Id, "Task", "TaskAssigned",
                 new { task.Id, task.AssigneeId });
 
-            // Collect email data — frontend will send via Graph API (no password needed)
-            var assigneeUser  = await _db.Users.FindAsync(request.AssigneeId!.Value);
+            // Resolve data now (before SaveChanges / scope disposal)
+            var newlyAdded    = newIds.Except(oldIds).ToList();
+            var assigneeUsers = await _db.Users.Where(u => newlyAdded.Contains(u.Id)).ToListAsync();
             var assignerUser  = await _db.Users.FindAsync(CurrentUserId);
             var projectEntity = await _db.Projects.FindAsync(task.ProjectId);
             var sprintEntity  = task.SprintId.HasValue ? await _db.Sprints.FindAsync(task.SprintId.Value) : null;
 
-            if (assigneeUser is not null)
+            if (assigneeUsers.Count > 0)
             {
-                emailNotification = new
+                var taskTitle    = task.Title;
+                var taskDesc     = task.Description;
+                var taskPrio     = task.Priority;
+                var projectName  = projectEntity?.Name ?? "—";
+                var sprintName   = sprintEntity?.Name  ?? "Backlog";
+                var assignerName = assignerUser?.FullName ?? "Un chef de projet";
+                var recipients   = assigneeUsers.Select(u => (u.Email, u.FullName)).ToList();
+
+                _ = Task.Run(async () =>
                 {
-                    to          = assigneeUser.Email,
-                    assigneeName = assigneeUser.FullName,
-                    taskTitle   = task.Title,
-                    taskDesc    = task.Description,
-                    taskPrio    = task.Priority,
-                    projectName = projectEntity?.Name ?? "—",
-                    sprintName  = sprintEntity?.Name  ?? "Backlog",
-                    assignerName = assignerUser?.FullName ?? "Un chef de projet",
-                };
+                    try
+                    {
+                        using var scope = _scopeFactory.CreateScope();
+                        var emailSvc    = scope.ServiceProvider.GetRequiredService<IEmailService>();
+
+                        foreach (var (email, name) in recipients)
+                        {
+                            var subject = $"📋 Nouvelle tâche assignée : {taskTitle}";
+                            var html    = SprintEmailTemplates.TaskAssigned(
+                                              name, taskTitle, taskDesc,
+                                              taskPrio, projectName, sprintName, assignerName);
+                            await emailSvc.SendAsync(email, subject, html);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"[TaskAssigned email] {ex.Message}");
+                    }
+                });
             }
         }
 
@@ -243,7 +283,7 @@ public class TaskController : ControllerBase
         await _db.SaveChangesAsync();
 
         var dto = await ToDto(task.Id);
-        return Ok(new { task = dto, emailNotification });
+        return Ok(new { task = dto });
     }
 
     // S3-4: MoveTask
@@ -258,6 +298,16 @@ public class TaskController : ControllerBase
             return BadRequest(new { message = "Statut invalide." });
 
         var fromStatus = task.Status;
+
+        // ── Only a chef de projet (admin) can move a task OUT of "done" ──────
+        var activeStatuses = new[] { "todo", "clarifier", "in_progress" };
+        if (fromStatus == "done" && activeStatuses.Contains(request.Status))
+        {
+            var role = await GetProjectRoleAsync(task.ProjectId, CurrentUserId);
+            if (role != "admin" && role != "owner")
+                return StatusCode(403, new { message = "Seul le chef de projet peut rouvrir une tâche terminée." });
+        }
+
         task.Status = request.Status;
         if (request.Order.HasValue) task.Order = request.Order.Value;
         task.UpdatedAt = DateTime.UtcNow;
@@ -270,52 +320,88 @@ public class TaskController : ControllerBase
             task.Order
         });
 
-        // ── Auto-close sprint when ALL its tasks are done ────────────────
-        bool sprintAutoClosed    = false;
+        bool sprintAutoClosed     = false;
         bool projectAutoCompleted = false;
+        bool sprintReopened       = false;
+        bool projectReactivated   = false;
 
-        if (task.SprintId.HasValue && task.Status == "done")
+        if (task.SprintId.HasValue)
         {
-            // Count tasks in the same sprint that are NOT yet done
-            // (exclude the current task — it's already set to "done" in memory)
-            var pendingCount = await _db.Tasks
-                .CountAsync(t => t.SprintId == task.SprintId
-                              && t.Id       != task.Id
-                              && t.Status   != "done");
-
-            if (pendingCount == 0)
+            // ── Moving a task OUT of "done" → reopen closed sprint ────────────
+            if (fromStatus == "done" && activeStatuses.Contains(task.Status))
             {
                 var sprint = await _db.Sprints.FindAsync(task.SprintId.Value);
-                if (sprint is not null && sprint.Status != "closed")
+                if (sprint is not null && (sprint.Status == "closed" || sprint.Status == "completed"))
                 {
-                    sprint.Status    = "closed";
-                    sprintAutoClosed = true;
+                    sprint.Status  = "active";
+                    sprintReopened = true;
 
-                    await _events.AppendAsync(sprint.Id, "Sprint", "SprintAutoClosed", new
+                    await _events.AppendAsync(sprint.Id, "Sprint", "SprintReopened", new
                     {
                         sprint.Id,
-                        Reason = "Toutes les tâches sont terminées"
+                        Reason = "Une tâche terminée a été réouverte par le chef de projet"
                     });
 
-                    // ── Auto-complete project when ALL its sprints are closed ──
-                    var openSprintCount = await _db.Sprints
-                        .CountAsync(s => s.ProjectId == sprint.ProjectId
-                                      && s.Id        != sprint.Id
-                                      && s.Status    != "closed");
-
-                    if (openSprintCount == 0)
+                    // ── Reactivate project if it was closed/completed ─────────
+                    var project = await _db.Projects.FindAsync(sprint.ProjectId);
+                    if (project is not null
+                        && project.Status != "active"
+                        && project.Status != "archived")
                     {
-                        var project = await _db.Projects.FindAsync(sprint.ProjectId);
-                        if (project is not null && project.Status == "active")
-                        {
-                            project.Status        = "completed";
-                            projectAutoCompleted  = true;
+                        project.Status      = "active";
+                        projectReactivated  = true;
 
-                            await _events.AppendAsync(project.Id, "Project", "ProjectAutoCompleted", new
+                        await _events.AppendAsync(project.Id, "Project", "ProjectReactivated", new
+                        {
+                            project.Id,
+                            Reason = "Un sprint a été réouvert"
+                        });
+                    }
+                }
+            }
+
+            // ── Moving a task TO "done" → auto-close sprint if all tasks done ─
+            else if (task.Status == "done")
+            {
+                var pendingCount = await _db.Tasks
+                    .CountAsync(t => t.SprintId == task.SprintId
+                                  && t.Id       != task.Id
+                                  && t.Status   != "done");
+
+                if (pendingCount == 0)
+                {
+                    var sprint = await _db.Sprints.FindAsync(task.SprintId.Value);
+                    if (sprint is not null && sprint.Status != "closed")
+                    {
+                        sprint.Status    = "closed";
+                        sprintAutoClosed = true;
+
+                        await _events.AppendAsync(sprint.Id, "Sprint", "SprintAutoClosed", new
+                        {
+                            sprint.Id,
+                            Reason = "Toutes les tâches sont terminées"
+                        });
+
+                        // ── Auto-complete project when ALL sprints closed ──────
+                        var openSprintCount = await _db.Sprints
+                            .CountAsync(s => s.ProjectId == sprint.ProjectId
+                                          && s.Id        != sprint.Id
+                                          && s.Status    != "closed");
+
+                        if (openSprintCount == 0)
+                        {
+                            var project = await _db.Projects.FindAsync(sprint.ProjectId);
+                            if (project is not null && project.Status == "active")
                             {
-                                project.Id,
-                                Reason = "Tous les sprints sont clôturés"
-                            });
+                                project.Status       = "completed";
+                                projectAutoCompleted = true;
+
+                                await _events.AppendAsync(project.Id, "Project", "ProjectAutoCompleted", new
+                                {
+                                    project.Id,
+                                    Reason = "Tous les sprints sont clôturés"
+                                });
+                            }
                         }
                     }
                 }
@@ -328,7 +414,9 @@ public class TaskController : ControllerBase
         {
             task              = await ToDto(task.Id),
             sprintAutoClosed,
-            projectAutoCompleted
+            projectAutoCompleted,
+            sprintReopened,
+            projectReactivated
         });
     }
 
@@ -486,6 +574,44 @@ public class TaskController : ControllerBase
 
         QuestPDF.Settings.License = LicenseType.Community;
 
+        // ── Fix "System User" creator: fall back to the project admin ──────
+        string createdByName;
+        if (t.CreatedBy is null || t.CreatedBy.Email == "system@agentpm.local")
+        {
+            var projectAdmin = await _db.ProjectMembers
+                .Include(m => m.User)
+                .Where(m => m.ProjectId == t.ProjectId && (m.Role == "admin" || m.Role == "owner"))
+                .Select(m => m.User)
+                .FirstOrDefaultAsync();
+            createdByName = projectAdmin?.FullName ?? "—";
+        }
+        else
+        {
+            createdByName = t.CreatedBy.FullName ?? "—";
+        }
+
+        // ── Resolve all assignees (multi-assignee aware) ────────────────────
+        var assigneeIds = t.AssigneeIds.Count > 0
+            ? t.AssigneeIds
+            : (t.AssigneeId.HasValue ? new List<Guid> { t.AssigneeId.Value } : new List<Guid>());
+
+        List<string> assigneeNames;
+        if (assigneeIds.Count > 0)
+        {
+            assigneeNames = await _db.Users.AsNoTracking()
+                .Where(u => assigneeIds.Contains(u.Id))
+                .Select(u => u.FullName ?? "?")
+                .ToListAsync();
+        }
+        else
+        {
+            assigneeNames = new List<string>();
+        }
+        var assigneeDisplay = assigneeNames.Count > 0
+            ? string.Join(", ", assigneeNames)
+            : "—";
+
+        // ─────────────────────────────────────────────────────────────────────
         static string PrioLabel(string p) => p switch
         {
             "critical" => "Critique", "high" => "Haute",
@@ -536,14 +662,31 @@ public class TaskController : ControllerBase
                         }
                         Row("Statut",    StatusLabel(t.Status));
                         Row("Priorité",  PrioLabel(t.Priority), PrioColor(t.Priority));
-                        Row("Assigné à", t.Assignee?.FullName ?? "—");
+                        Row("Assigné à", assigneeDisplay);
                         Row("Sprint",    t.Sprint?.Name ?? "Backlog");
-                        Row("Créé par",  t.CreatedBy?.FullName ?? "—");
+                        Row("Créé par",  createdByName);
                         Row("Créé le",   t.CreatedAt.ToString("dd/MM/yyyy HH:mm"));
                         Row("Modifié le",t.UpdatedAt.ToString("dd/MM/yyyy HH:mm"));
                         if (t.StoryPoints.HasValue)
                             Row("Story Points", t.StoryPoints.Value.ToString());
                     });
+
+                    // ── Assignés détail (si plusieurs)
+                    if (assigneeNames.Count > 1)
+                    {
+                        col.Item().Text("Assignés").Bold().FontSize(12).FontColor("#4f46e5");
+                        col.Item().PaddingTop(4).PaddingBottom(14).Column(ac =>
+                        {
+                            foreach (var name in assigneeNames)
+                            {
+                                ac.Item().Row(r =>
+                                {
+                                    r.ConstantItem(10).Text("•").FontColor("#6366f1");
+                                    r.RelativeItem().Text(name).FontSize(10);
+                                });
+                            }
+                        });
+                    }
 
                     // ── Description
                     if (!string.IsNullOrWhiteSpace(t.Description))
@@ -607,10 +750,26 @@ public class TaskController : ControllerBase
 
         var commentCount = await _db.TaskComments.CountAsync(c => c.TaskId == id);
 
+        // Resolve names for all assignees
+        var effectiveIds = t.AssigneeIds.Count > 0 ? t.AssigneeIds
+                         : t.AssigneeId.HasValue    ? [t.AssigneeId.Value]
+                         : new List<Guid>();
+
+        List<string> assigneeNames = [];
+        if (effectiveIds.Count > 0)
+        {
+            var users = await _db.Users.AsNoTracking()
+                .Where(u => effectiveIds.Contains(u.Id))
+                .ToDictionaryAsync(u => u.Id, u => u.FullName);
+            assigneeNames = effectiveIds.Select(gid => users.TryGetValue(gid, out var n) ? n : "?").ToList();
+        }
+
         return new TaskDto(
             t.Id, t.ProjectId, t.SprintId, t.Title, t.Description,
             t.Status, t.Priority, t.StoryPoints,
             t.AssigneeId, t.Assignee?.FullName,
-            t.CreatedById, t.Order, t.CreatedAt, t.UpdatedAt, commentCount, t.Tags, t.Assignee?.PhotoUrl);
+            t.CreatedById, t.Order, t.CreatedAt, t.UpdatedAt, commentCount,
+            t.Tags, t.Assignee?.PhotoUrl,
+            effectiveIds, assigneeNames);
     }
 }

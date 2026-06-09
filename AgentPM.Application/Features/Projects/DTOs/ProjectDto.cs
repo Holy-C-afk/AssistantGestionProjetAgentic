@@ -7,5 +7,6 @@ public record ProjectDto(
     Guid OwnerId,
     string Status,
     DateTime CreatedAt,
-    int MemberCount
+    int MemberCount,
+    string CurrentUserRole   // role of the requesting user in this project
 );

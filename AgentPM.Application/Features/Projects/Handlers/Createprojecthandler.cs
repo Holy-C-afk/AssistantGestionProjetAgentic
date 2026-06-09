@@ -42,7 +42,8 @@ public class CreateProjectHandler : IRequestHandler<CreateProjectCommand, Projec
             aggregate.Project.OwnerId,
             aggregate.Project.Status,
             aggregate.Project.CreatedAt,
-            0
+            0,
+            "admin"   // creator is always admin
         );
     }
 }

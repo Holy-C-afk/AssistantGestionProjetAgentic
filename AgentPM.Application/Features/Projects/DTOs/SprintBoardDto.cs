@@ -1,4 +1,4 @@
-﻿namespace AgentPM.Application.Features.Projects.DTOs;
+namespace AgentPM.Application.Features.Projects.DTOs;
 
 public record SprintBoardDto(
     Guid SprintId,
@@ -20,5 +20,7 @@ public record BoardTaskDto(
     int Order,
     int CommentCount,
     List<string>? Tags = null,
-    string? AssigneePhotoUrl = null
+    string? AssigneePhotoUrl = null,
+    List<Guid>? AssigneeIds = null,
+    List<string>? AssigneeNames = null
 );

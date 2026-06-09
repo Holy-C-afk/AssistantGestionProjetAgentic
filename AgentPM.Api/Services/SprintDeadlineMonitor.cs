@@ -28,8 +28,8 @@ public class SprintDeadlineMonitor : BackgroundService
     {
         _log.LogInformation("[SprintDeadlineMonitor] started — checking every {h}h.", CheckInterval.TotalHours);
 
-        // Run an initial check shortly after startup, then on the interval.
-        await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
+        // Run an initial check 10 seconds after startup, then on the 24h interval.
+        await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -37,6 +37,9 @@ public class SprintDeadlineMonitor : BackgroundService
             await Task.Delay(CheckInterval, stoppingToken);
         }
     }
+
+    /// <summary>Allows manual triggering from a controller (for testing or immediate use).</summary>
+    public Task TriggerNowAsync() => RunCheckAsync(CancellationToken.None);
 
     private async Task RunCheckAsync(CancellationToken ct)
     {

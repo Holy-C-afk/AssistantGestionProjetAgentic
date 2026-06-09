@@ -76,13 +76,63 @@ public class ProjectController : ControllerBase
     {
         var project = await _db.Projects
             .Include(p => p.Members).ThenInclude(m => m.User)
-            .Include(p => p.Sprints).ThenInclude(s => s.Tasks)
+            .Include(p => p.Sprints).ThenInclude(s => s.Tasks).ThenInclude(t => t.Assignee)
             .FirstOrDefaultAsync(p => p.Id == id);
         if (project is null) return NotFound();
 
         QuestPDF.Settings.License = LicenseType.Community;
 
-        var taskCount = project.Sprints.SelectMany(s => s.Tasks).Count();
+        // Collect all unique multi-assignee IDs across all tasks and batch-load names
+        var allTasks = project.Sprints.SelectMany(s => s.Tasks).ToList();
+        var multiIds = allTasks
+            .Where(t => t.AssigneeIds.Count > 0)
+            .SelectMany(t => t.AssigneeIds)
+            .Distinct()
+            .ToList();
+        var userNameMap = multiIds.Count > 0
+            ? await _db.Users.AsNoTracking()
+                .Where(u => multiIds.Contains(u.Id))
+                .ToDictionaryAsync(u => u.Id, u => u.FullName ?? "?")
+            : new Dictionary<Guid, string>();
+
+        // Resolve assignee display string for a task (multi-assignee aware)
+        string AssigneeList(AgentPM.Domain.Entities.TaskItem t)
+        {
+            if (t.AssigneeIds.Count > 0)
+            {
+                var names = t.AssigneeIds
+                    .Select(aid => userNameMap.TryGetValue(aid, out var n) ? n : "?")
+                    .ToList();
+                return string.Join(", ", names);
+            }
+            return t.Assignee?.FullName ?? "—";
+        }
+
+        // Human-readable role labels
+        static string RoleLabel(string role) => role switch
+        {
+            "admin"  => "Chef de projet",
+            "owner"  => "Chef de projet",
+            "member" => "Collaborateur",
+            _        => role
+        };
+
+        static string SprintStatusLabel(string s) => s switch
+        {
+            "planned"   => "Planifié",
+            "active"    => "Actif",
+            "closed"    => "Clôturé",
+            "completed" => "Terminé",
+            _ => s
+        };
+
+        static string PrioLabel(string p) => p switch
+        {
+            "critical" => "Critique", "high" => "Haute",
+            "medium"   => "Moyenne",  "low"  => "Faible", _ => p
+        };
+
+        var taskCount = allTasks.Count;
 
         var pdf = Document.Create(doc =>
         {
@@ -90,78 +140,121 @@ public class ProjectController : ControllerBase
             {
                 page.Size(PageSizes.A4);
                 page.Margin(40);
-                page.DefaultTextStyle(t => t.FontSize(11));
+                page.DefaultTextStyle(x => x.FontSize(11).FontColor("#374151"));
 
-                page.Header().BorderBottom(1).BorderColor("#6366f1").PaddingBottom(8).Row(row =>
+                // ── Header
+                page.Header().BorderBottom(2).BorderColor("#6366f1").PaddingBottom(8).Column(c =>
                 {
-                    row.RelativeItem().Column(c =>
-                    {
-                        c.Item().Text(project.Name).FontSize(22).Bold().FontColor("#1e1b4b");
-                        c.Item().Text($"Statut : {project.Status}  •  Créé le {project.CreatedAt:dd/MM/yyyy}")
-                            .FontSize(10).FontColor("#6b7280");
-                    });
+                    c.Item().Text(project.Name).FontSize(22).Bold().FontColor("#1e1b4b");
+                    c.Item().Text($"Statut : {project.Status}  •  Créé le {project.CreatedAt:dd/MM/yyyy}")
+                        .FontSize(10).FontColor("#6b7280");
                 });
 
                 page.Content().PaddingTop(16).Column(col =>
                 {
+                    // ── Description
                     if (!string.IsNullOrWhiteSpace(project.Description))
                     {
                         col.Item().Text("Description").Bold().FontColor("#4f46e5");
-                        col.Item().PaddingBottom(12).Text(project.Description).FontColor("#374151");
+                        col.Item().PaddingBottom(12).Background("#f8fafc").Padding(8)
+                            .Text(project.Description).FontColor("#374151");
                     }
 
+                    // ── Résumé
                     col.Item().Text("Résumé").Bold().FontColor("#4f46e5");
                     col.Item().PaddingBottom(12).Table(t =>
                     {
-                        t.ColumnsDefinition(c => { c.RelativeColumn(); c.RelativeColumn(); });
+                        t.ColumnsDefinition(c => { c.RelativeColumn(3); c.RelativeColumn(); });
                         void Cell(string label, string val)
                         {
-                            t.Cell().Padding(4).Background("#f9fafb").Text(label).Bold();
-                            t.Cell().Padding(4).Text(val);
+                            t.Cell().Padding(5).Background("#f9fafb").Text(label).Bold().FontSize(10);
+                            t.Cell().Padding(5).Text(val).FontSize(10);
                         }
                         Cell("Membres", project.Members.Count.ToString());
                         Cell("Sprints", project.Sprints.Count.ToString());
                         Cell("Tâches totales", taskCount.ToString());
                     });
 
+                    // ── Membres
                     if (project.Members.Any())
                     {
                         col.Item().Text("Membres").Bold().FontColor("#4f46e5");
-                        col.Item().PaddingBottom(12).Table(t =>
+                        col.Item().PaddingBottom(14).Table(t =>
                         {
-                            t.ColumnsDefinition(c => { c.RelativeColumn(2); c.RelativeColumn(2); c.RelativeColumn(); });
+                            t.ColumnsDefinition(c => { c.RelativeColumn(2); c.RelativeColumn(2); c.RelativeColumn(1.2f); });
                             t.Header(h =>
                             {
-                                h.Cell().Background("#e0e7ff").Padding(4).Text("Nom").Bold();
-                                h.Cell().Background("#e0e7ff").Padding(4).Text("Email").Bold();
-                                h.Cell().Background("#e0e7ff").Padding(4).Text("Rôle").Bold();
+                                h.Cell().Background("#e0e7ff").Padding(5).Text("Nom").Bold().FontSize(10);
+                                h.Cell().Background("#e0e7ff").Padding(5).Text("Email").Bold().FontSize(10);
+                                h.Cell().Background("#e0e7ff").Padding(5).Text("Rôle").Bold().FontSize(10);
                             });
-                            foreach (var m in project.Members)
+                            foreach (var m in project.Members.OrderBy(m => m.Role))
                             {
-                                t.Cell().Padding(4).Text(m.User?.FullName ?? "-");
-                                t.Cell().Padding(4).Text(m.User?.Email ?? "-");
-                                t.Cell().Padding(4).Text(m.Role);
+                                t.Cell().Padding(5).Text(m.User?.FullName ?? "-").FontSize(10);
+                                t.Cell().Padding(5).Text(m.User?.Email ?? "-").FontSize(10);
+                                t.Cell().Padding(5).Text(RoleLabel(m.Role)).FontSize(10);
                             }
                         });
                     }
 
+                    // ── Sprints + Tâches détaillées
                     if (project.Sprints.Any())
                     {
-                        col.Item().Text("Sprints").Bold().FontColor("#4f46e5");
-                        col.Item().Table(t =>
+                        col.Item().Text("Sprints & Tâches").Bold().FontColor("#4f46e5");
+                        col.Item().PaddingTop(4).Column(spCol =>
                         {
-                            t.ColumnsDefinition(c => { c.RelativeColumn(2); c.RelativeColumn(); c.RelativeColumn(); });
-                            t.Header(h =>
+                            foreach (var sprint in project.Sprints.OrderBy(s => s.CreatedAt))
                             {
-                                h.Cell().Background("#e0e7ff").Padding(4).Text("Sprint").Bold();
-                                h.Cell().Background("#e0e7ff").Padding(4).Text("Statut").Bold();
-                                h.Cell().Background("#e0e7ff").Padding(4).Text("Tâches").Bold();
-                            });
-                            foreach (var s in project.Sprints.OrderBy(s => s.CreatedAt))
-                            {
-                                t.Cell().Padding(4).Text(s.Name);
-                                t.Cell().Padding(4).Text(s.Status);
-                                t.Cell().Padding(4).Text(s.Tasks.Count.ToString());
+                                // Sprint sub-header
+                                spCol.Item().PaddingTop(8).Row(r =>
+                                {
+                                    r.RelativeItem().Background("#e0e7ff").Padding(5).Text(txt =>
+                                    {
+                                        txt.Span(sprint.Name).Bold().FontSize(11).FontColor("#3730a3");
+                                        txt.Span($"  —  {SprintStatusLabel(sprint.Status)}")
+                                           .FontSize(10).FontColor("#6366f1");
+                                        if (sprint.StartDate.HasValue && sprint.EndDate.HasValue)
+                                            txt.Span($"  ({sprint.StartDate:dd/MM/yyyy} → {sprint.EndDate:dd/MM/yyyy})")
+                                               .FontSize(9).FontColor("#9ca3af");
+                                    });
+                                });
+
+                                if (!sprint.Tasks.Any())
+                                {
+                                    spCol.Item().PaddingLeft(8).PaddingBottom(4)
+                                        .Text("Aucune tâche").FontSize(9).Italic().FontColor("#9ca3af");
+                                    continue;
+                                }
+
+                                // Tasks table for this sprint
+                                spCol.Item().PaddingBottom(6).Table(t =>
+                                {
+                                    t.ColumnsDefinition(c =>
+                                    {
+                                        c.RelativeColumn(2.5f); // Titre
+                                        c.RelativeColumn(3);    // Description
+                                        c.RelativeColumn(2);    // Assignés
+                                        c.RelativeColumn(1);    // Priorité
+                                    });
+                                    t.Header(h =>
+                                    {
+                                        h.Cell().Background("#f3f4f6").Padding(4).Text("Tâche").Bold().FontSize(9);
+                                        h.Cell().Background("#f3f4f6").Padding(4).Text("Description").Bold().FontSize(9);
+                                        h.Cell().Background("#f3f4f6").Padding(4).Text("Assignés").Bold().FontSize(9);
+                                        h.Cell().Background("#f3f4f6").Padding(4).Text("Priorité").Bold().FontSize(9);
+                                    });
+                                    foreach (var task in sprint.Tasks.OrderBy(x => x.Order))
+                                    {
+                                        t.Cell().Padding(4).Text(task.Title).FontSize(9);
+                                        t.Cell().Padding(4).Text(
+                                            !string.IsNullOrWhiteSpace(task.Description)
+                                                ? (task.Description.Length > 120 ? task.Description[..120] + "…" : task.Description)
+                                                : "—"
+                                        ).FontSize(8).FontColor("#6b7280");
+                                        t.Cell().Padding(4).Text(AssigneeList(task)).FontSize(9);
+                                        t.Cell().Padding(4).Text(PrioLabel(task.Priority)).FontSize(9);
+                                    }
+                                });
                             }
                         });
                     }
@@ -206,7 +299,7 @@ public class ProjectController : ControllerBase
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateProjectRequest request)
     {
-        var result = await _mediator.Send(new UpdateProjectCommand(id, request.Name, request.Description));
+        var result = await _mediator.Send(new UpdateProjectCommand(id, request.Name, request.Description, CurrentUserId));
         return Ok(result);
     }
 
@@ -274,6 +367,48 @@ public class ProjectController : ControllerBase
     {
         await _mediator.Send(new RemoveMemberCommand(id, userId));
         return NoContent();
+    }
+
+    // DELETE api/project/{id}  — chef de projet (admin/owner) only
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> DeleteProject(Guid id)
+    {
+        var project = await _db.Projects
+            .Include(p => p.Members)
+            .FirstOrDefaultAsync(p => p.Id == id);
+
+        if (project is null) return NotFound(new { message = "Projet introuvable." });
+
+        // Only admin/owner members (or the project owner) can delete
+        var member = project.Members.FirstOrDefault(m => m.UserId == CurrentUserId);
+        var isAdmin = member?.Role is "admin" or "owner" || project.OwnerId == CurrentUserId;
+        if (!isAdmin)
+            return Forbid();
+
+        // Cascade: delete sprints → tasks → comments (EF cascade or manual)
+        var sprintIds = await _db.Sprints
+            .Where(s => s.ProjectId == id)
+            .Select(s => s.Id)
+            .ToListAsync();
+
+        var taskIds = await _db.Tasks
+            .Where(t => t.ProjectId == id)
+            .Select(t => t.Id)
+            .ToListAsync();
+
+        if (taskIds.Any())
+        {
+            await _db.TaskComments.Where(c => taskIds.Contains(c.TaskId)).ExecuteDeleteAsync();
+            await _db.Tasks.Where(t => taskIds.Contains(t.Id)).ExecuteDeleteAsync();
+        }
+
+        if (sprintIds.Any())
+            await _db.Sprints.Where(s => sprintIds.Contains(s.Id)).ExecuteDeleteAsync();
+
+        await _db.ProjectMembers.Where(m => m.ProjectId == id).ExecuteDeleteAsync();
+        await _db.Projects.Where(p => p.Id == id).ExecuteDeleteAsync();
+
+        return Ok(new { success = true });
     }
 }
 

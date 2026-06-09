@@ -14,7 +14,8 @@ namespace AgentPM.Domain.Entities
         public string Status { get; set; } = "todo";
         public string Priority { get; set; } = "medium";
         public int? StoryPoints { get; set; }
-        public Guid? AssigneeId { get; set; }
+        public Guid? AssigneeId { get; set; }          // kept for nav / email backward compat
+        public List<Guid> AssigneeIds { get; set; } = []; // multi-assignee (jsonb)
         public Guid CreatedById { get; set; }
         public int Order { get; set; } = 0;
         public List<string> Tags { get; set; } = [];

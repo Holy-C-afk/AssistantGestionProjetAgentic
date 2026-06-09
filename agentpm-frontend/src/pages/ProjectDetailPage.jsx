@@ -127,7 +127,11 @@ export default function ProjectDetailPage() {
   // auto-closes a sprint, completes a project, reopens a sprint, or reactivates a project.
   const handleAutoRefresh = ({ sprintAutoClosed, projectAutoCompleted, sprintReopened, projectReactivated } = {}) => {
     if (sprintAutoClosed || sprintReopened) setSprintRefreshKey(k => k + 1);
-    if (projectAutoCompleted || projectReactivated) getProjectById(id).then(p => setProject(p));
+    // Always re-fetch project data when any sprint or project state changes
+    // (covers the case where sprintReopened=true but projectReactivated=false)
+    if (sprintAutoClosed || sprintReopened || projectAutoCompleted || projectReactivated) {
+      getProjectById(id).then(p => setProject(p)).catch(console.error);
+    }
   };
 
   if (!project) return (

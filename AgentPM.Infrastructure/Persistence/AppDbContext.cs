@@ -71,6 +71,7 @@ public class AppDbContext : DbContext
             e.HasOne(x => x.CreatedBy).WithMany().HasForeignKey(x => x.CreatedById).OnDelete(DeleteBehavior.Restrict);
             e.Property(x => x.Order).HasColumnName("order");
             e.Property(x => x.Tags).HasColumnType("jsonb").HasDefaultValueSql("'[]'::jsonb");
+            e.Property(x => x.AssigneeIds).HasColumnType("jsonb").HasDefaultValueSql("'[]'::jsonb");
         });
 
         modelBuilder.Entity<TaskDependency>(e =>

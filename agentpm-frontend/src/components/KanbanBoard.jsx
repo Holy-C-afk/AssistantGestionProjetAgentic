@@ -75,9 +75,16 @@ export default function KanbanBoard({ sprintId, projectId, onTaskClick, refreshK
 
     try {
       const result = await moveTask(task.id, targetStatus);
-      // Backend signals that sprint or project status changed automatically
-      if (result?.sprintAutoClosed || result?.projectAutoCompleted) {
-        onAutoRefresh?.({ sprintAutoClosed: result.sprintAutoClosed, projectAutoCompleted: result.projectAutoCompleted });
+      // Fire a single onAutoRefresh with all four flags at once so
+      // handleAutoRefresh can decide what to refresh in one pass.
+      if (result?.sprintAutoClosed || result?.projectAutoCompleted
+          || result?.sprintReopened || result?.projectReactivated) {
+        onAutoRefresh?.({
+          sprintAutoClosed:     result.sprintAutoClosed,
+          projectAutoCompleted: result.projectAutoCompleted,
+          sprintReopened:       result.sprintReopened,
+          projectReactivated:   result.projectReactivated,
+        });
       }
     } catch (e) {
       console.error(e);
@@ -179,6 +186,7 @@ export default function KanbanBoard({ sprintId, projectId, onTaskClick, refreshK
               onTaskClick={onTaskClick}
               onAddTask={isAdmin && status === 'todo' ? () => setShowAdd(true) : undefined}
               onPriorityChanged={fetchBoard}
+              isAdmin={isAdmin}
             />
           ))}
         </div>

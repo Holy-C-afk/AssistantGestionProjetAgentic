@@ -26,4 +26,13 @@ public class UserRepository : IUserRepository
         _db.Users.Add(user);
         await _db.SaveChangesAsync(ct);
     }
+
+    public async Task<Dictionary<Guid, User>> GetByIdsAsync(IEnumerable<Guid> ids, CancellationToken ct)
+    {
+        var idList = ids.ToList();
+        if (idList.Count == 0) return new Dictionary<Guid, User>();
+        return await _db.Users.AsNoTracking()
+            .Where(u => idList.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => u, ct);
+    }
 }

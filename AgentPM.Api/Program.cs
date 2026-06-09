@@ -19,12 +19,13 @@ builder.Services.AddScoped<ISprintBoardRepository, SprintBoardRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<EventLogger>();
 
-// ── Email (SendGrid REST API — no SMTP password needed) ──
-builder.Services.AddHttpClient(); // default named client for SendGridEmailService
-builder.Services.AddSingleton<IEmailService, SendGridEmailService>();
+// ── Email (Office 365 SMTP — smtp.office365.com:587) ─────
+builder.Services.AddSingleton<IEmailService, SmtpEmailService>();
 
 // ── Sprint deadline background monitor ───────────────────
-builder.Services.AddHostedService<SprintDeadlineMonitor>();
+// Register as singleton so controllers can inject it directly for manual triggers
+builder.Services.AddSingleton<SprintDeadlineMonitor>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<SprintDeadlineMonitor>());
 
 // ── Database ──────────────────────────────────────────────
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -107,6 +108,10 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     await db.Database.MigrateAsync();
+
+    // Ensure AssigneeIds jsonb column exists (multi-assignee)
+    await db.Database.ExecuteSqlRawAsync(
+        "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS \"AssigneeIds\" jsonb NOT NULL DEFAULT '[]'::jsonb;");
 
     // Ensure Tags column exists (idempotent — safe to run every startup)
     await db.Database.ExecuteSqlRawAsync(

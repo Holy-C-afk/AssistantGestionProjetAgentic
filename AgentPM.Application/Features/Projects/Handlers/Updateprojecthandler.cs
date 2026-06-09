@@ -22,6 +22,9 @@ public class UpdateProjectHandler : IRequestHandler<UpdateProjectCommand, Projec
         aggregate.Update(request.Name, request.Description);
         await _repo.UpdateAsync(aggregate.Project, ct);
 
+        var member = aggregate.Project.Members.FirstOrDefault(m => m.UserId == request.UpdatedById);
+        var role   = member?.Role ?? (aggregate.Project.OwnerId == request.UpdatedById ? "admin" : "member");
+
         return new ProjectDto(
             aggregate.Project.Id,
             aggregate.Project.Name,
@@ -29,7 +32,8 @@ public class UpdateProjectHandler : IRequestHandler<UpdateProjectCommand, Projec
             aggregate.Project.OwnerId,
             aggregate.Project.Status,
             aggregate.Project.CreatedAt,
-            aggregate.Project.Members.Count
+            aggregate.Project.Members.Count,
+            role
         );
     }
 }
