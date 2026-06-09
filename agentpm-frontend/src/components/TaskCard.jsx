@@ -226,10 +226,23 @@ export default function TaskCard({ task, onClick, onPriorityChanged, isAdmin = t
   }));
   const prioMap = Object.fromEntries(priorities.map(p => [p.key, p]));
 
+  // Determine if the current user is assigned to this task
+  const currentUserId = sessionStorage.getItem('userId');
+  const isAssignedToMe = task.assigneeIds?.includes(currentUserId)
+    || task.assigneeId === currentUserId;
+
+  // Drag rules:
+  //   Admin      → can drag anything (except done tasks stay non-draggable
+  //                if they want; currently admins CAN drag done tasks)
+  //   Collaborator → can only drag tasks assigned to them AND not done
+  const dragDisabled = isAdmin
+    ? false
+    : !isAssignedToMe || isDone;
+
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
     data: { task },
-    disabled: isDone && !isAdmin,
+    disabled: dragDisabled,
   });
 
   const [currentPriority, setCurrentPriority] = useState(task.priority);
@@ -324,13 +337,13 @@ export default function TaskCard({ task, onClick, onPriorityChanged, isAdmin = t
           border: `1px solid var(--border)`,
           borderLeftWidth: '3px',
           borderLeftColor: isDone ? '#D1FAE5' : leftBorder,
-          opacity: isDragging ? 0.45 : isDone ? 0.8 : 1,
+          opacity: isDragging ? 0.45 : (isDone || (!isAdmin && !isAssignedToMe)) ? 0.72 : 1,
         }}
         {...attributes}
         {...listeners}
         onClick={() => { if (!isDragging) onClick?.(task); }}
         className={`group relative rounded-xl p-3 mb-2 transition-all duration-100 ${
-          isDone && !isAdmin ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
+          dragDisabled ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
         }`}
         onMouseEnter={e => { if (!isDragging) e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)'; }}
         onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; }}
